@@ -76,16 +76,6 @@ export default function Settings() {
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="font-medium">Email Notifications</p>
-              <p className="text-sm text-gray-500">Receive email updates about your fleet</p>
-            </div>
-            <Switch
-              checked={settings.emailNotifications}
-              onCheckedChange={() => handleToggle('emailNotifications')}
-            />
-          </div>
-          <div className="flex items-center justify-between">
-            <div>
               <p className="font-medium">Push Notifications</p>
               <p className="text-sm text-gray-500">Receive browser notifications</p>
             </div>

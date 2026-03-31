@@ -1,5 +1,4 @@
 import { db } from '@/lib/db';
-import { queueNotificationEmail } from '@/lib/email-notifications';
 import { loadCurrentUserSettings } from '@/lib/settings-data';
 import { isSupabaseConfigured, supabase } from '@/lib/supabase';
 import type { Assignment, Driver, FuelLog, Incident, Maintenance, Notification, OdometerLog, Trip, Vehicle } from '@/types';
@@ -1222,7 +1221,6 @@ export async function createIncident(incident: Incident): Promise<Incident> {
       driverId: createdIncident.driverId,
       createdAt: new Date().toISOString(),
     });
-    await queueNotificationEmail(`auto-incident-${createdIncident.id}`);
   } catch (error) {
     console.error('Failed to create incident notification', error);
   }

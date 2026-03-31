@@ -144,13 +144,6 @@ create table if not exists public.notifications (
   created_at timestamptz not null default timezone('utc', now())
 );
 
-create table if not exists public.notification_email_deliveries (
-  notification_id text not null references public.notifications(id) on delete cascade,
-  profile_id uuid not null references public.profiles(id) on delete cascade,
-  emailed_at timestamptz not null default timezone('utc', now()),
-  primary key (notification_id, profile_id)
-);
-
 create or replace function public.set_updated_at()
 returns trigger
 language plpgsql
@@ -207,7 +200,6 @@ alter table public.incidents enable row level security;
 alter table public.trips enable row level security;
 alter table public.documents enable row level security;
 alter table public.notifications enable row level security;
-alter table public.notification_email_deliveries enable row level security;
 
 drop policy if exists "Users can view own profile" on public.profiles;
 create policy "Users can view own profile"

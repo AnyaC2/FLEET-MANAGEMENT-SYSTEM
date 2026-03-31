@@ -1,6 +1,5 @@
 import type { Document, Notification } from '@/types';
 import { listDocuments } from '@/lib/documents-data';
-import { queueNotificationEmail } from '@/lib/email-notifications';
 import { loadCurrentUserSettings } from '@/lib/settings-data';
 import {
   deleteNotification,
@@ -184,9 +183,6 @@ export async function syncAutomaticNotifications(): Promise<void> {
 
   for (const notification of desiredRuleNotifications.values()) {
     await upsertNotification(notification);
-    if (!existingById.has(notification.id)) {
-      await queueNotificationEmail(notification.id);
-    }
   }
 
   const staleRuleNotifications = notifications.filter(

@@ -4,7 +4,6 @@ import type { AppSettings } from '@/types';
 const SETTINGS_STORAGE_PREFIX = 'lfz_fleet_settings_';
 
 export const defaultSettings: AppSettings = {
-  emailNotifications: true,
   pushNotifications: true,
   maintenanceAlerts: true,
   fuelAlerts: true,
