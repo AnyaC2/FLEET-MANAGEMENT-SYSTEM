@@ -30,7 +30,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Plus, Eye, CheckCircle2, Clock, Wrench, AlertTriangle, CircleDollarSign } from 'lucide-react';
+import { Plus, Eye, CheckCircle2, Clock, Wrench, AlertTriangle, CircleDollarSign, Download } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import {
@@ -39,6 +39,8 @@ import {
   listOperationalVehiclesAndActiveDrivers,
   updateIncident,
 } from '@/lib/fleet-data';
+import { exportWorkbook } from '@/lib/excel-export';
+import { dateFallsInRange, resolveDateRange, type PeriodPreset } from '@/lib/report-filters';
 
 const severityOptions = ['Minor', 'Moderate', 'Major'];
 const statusOptions = ['Under Review', 'In Repair', 'Resolved'];
@@ -50,9 +52,14 @@ export default function Incidents() {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [selectedIncident, setSelectedIncident] = useState<Incident | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [reportPreset, setReportPreset] = useState<PeriodPreset>('30d');
+  const [reportStatus, setReportStatus] = useState<Incident['status'] | 'all'>('all');
+  const [customStartDate, setCustomStartDate] = useState('');
+  const [customEndDate, setCustomEndDate] = useState('');
 
   // Form state
   const [formData, setFormData] = useState({
@@ -225,6 +232,43 @@ export default function Incidents() {
   const pendingCount = incidents.filter((i) => i.status !== 'Resolved').length;
   const totalCost = incidents.reduce((sum, i) => sum + (i.finalRepairCost || i.repairCost), 0);
 
+  const handleExportIncidentsReport = () => {
+    const range = resolveDateRange({
+      preset: reportPreset,
+      customStartDate,
+      customEndDate,
+    });
+    const rows = incidents
+      .filter((incident) => dateFallsInRange(incident.date, range))
+      .filter((incident) => reportStatus === 'all' || incident.status === reportStatus)
+      .map((incident) => {
+        const vehicle = vehicles.find((item) => item.id === incident.vehicleId);
+        const driver = incident.driverId ? drivers.find((item) => item.id === incident.driverId) : null;
+        return {
+          Date: format(new Date(incident.date), 'MMM d, yyyy'),
+          Title: incident.title,
+          'Plate Number': vehicle?.plateNumber ?? '-',
+          Driver: driver?.fullName ?? '-',
+          Severity: incident.severity,
+          Status: incident.status,
+          'Repair Cost (NGN)': incident.finalRepairCost || incident.repairCost,
+          Location: incident.location ?? '-',
+        };
+      });
+
+    exportWorkbook({
+      filename: `incidents-report-${new Date().toISOString().split('T')[0]}.xlsx`,
+      sheets: [
+        {
+          name: 'Incidents',
+          rows,
+        },
+      ],
+    });
+    setIsReportModalOpen(false);
+    toast.success('Incidents report downloaded');
+  };
+
   return (
     <div className="space-y-6">
       {/* Page header */}
@@ -233,12 +277,81 @@ export default function Incidents() {
           <h1 className="text-2xl font-bold text-gray-900">Incidents</h1>
           <p className="text-gray-500">Track and manage vehicle incidents</p>
         </div>
+        <div className="flex gap-3">
+          <Dialog open={isReportModalOpen} onOpenChange={setIsReportModalOpen}>
+            <Button variant="outline" onClick={() => setIsReportModalOpen(true)}>
+              <Download className="w-4 h-4 mr-2" />
+              Generate Report
+            </Button>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Incidents Report</DialogTitle>
+                <DialogDescription>
+                  Filter incidents by date range and status before exporting to Excel.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-2">
+                <div className="space-y-2">
+                  <Label>Period</Label>
+                  <Select value={reportPreset} onValueChange={(value) => setReportPreset(value as PeriodPreset)}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="7d">Last 7 days</SelectItem>
+                      <SelectItem value="30d">Last 30 days</SelectItem>
+                      <SelectItem value="60d">Last 60 days</SelectItem>
+                      <SelectItem value="90d">Last 90 days</SelectItem>
+                      <SelectItem value="365d">Last 12 months</SelectItem>
+                      <SelectItem value="all">All time</SelectItem>
+                      <SelectItem value="custom">Custom range</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {reportPreset === 'custom' && (
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="incidentReportStartDate">Start Date</Label>
+                      <Input id="incidentReportStartDate" type="date" value={customStartDate} onChange={(event) => setCustomStartDate(event.target.value)} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="incidentReportEndDate">End Date</Label>
+                      <Input id="incidentReportEndDate" type="date" value={customEndDate} onChange={(event) => setCustomEndDate(event.target.value)} />
+                    </div>
+                  </div>
+                )}
+                <div className="space-y-2">
+                  <Label>Status</Label>
+                  <Select value={reportStatus} onValueChange={(value) => setReportStatus(value as Incident['status'] | 'all')}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All statuses</SelectItem>
+                      <SelectItem value="Under Review">Under Review</SelectItem>
+                      <SelectItem value="In Repair">In Repair</SelectItem>
+                      <SelectItem value="Resolved">Resolved</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setIsReportModalOpen(false)}>
+                  Cancel
+                </Button>
+                <Button type="button" onClick={handleExportIncidentsReport}>
+                  Download Excel
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
         {canManageRecords && (
           <Button onClick={() => setIsAddModalOpen(true)}>
             <Plus className="w-4 h-4 mr-2" />
             Report Incident
           </Button>
         )}
+        </div>
       </div>
 
       {/* Add Incident Modal */}

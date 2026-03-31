@@ -31,7 +31,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Plus, Wrench, AlertCircle, CheckCircle2, Clock, CircleDollarSign } from 'lucide-react';
+import { Plus, Wrench, AlertCircle, CheckCircle2, Clock, CircleDollarSign, Download } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import {
@@ -40,6 +40,8 @@ import {
   listOperationalVehicles,
   updateMaintenance,
 } from '@/lib/fleet-data';
+import { exportWorkbook } from '@/lib/excel-export';
+import { dateFallsInRange, resolveDateRange, type PeriodPreset } from '@/lib/report-filters';
 
 const serviceTypes = [
   'Oil Change',
@@ -58,7 +60,12 @@ export default function Maintenance() {
   const [maintenance, setMaintenance] = useState<Maintenance[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [reportPreset, setReportPreset] = useState<PeriodPreset>('30d');
+  const [reportStatus, setReportStatus] = useState<Maintenance['status'] | 'all'>('all');
+  const [customStartDate, setCustomStartDate] = useState('');
+  const [customEndDate, setCustomEndDate] = useState('');
 
   // Form state
   const [formData, setFormData] = useState({
@@ -210,6 +217,41 @@ export default function Maintenance() {
     })
     .reduce((sum, m) => sum + m.cost, 0);
 
+  const handleExportMaintenanceReport = () => {
+    const range = resolveDateRange({
+      preset: reportPreset,
+      customStartDate,
+      customEndDate,
+    });
+    const rows = maintenance
+      .filter((item) => dateFallsInRange(item.scheduledDate, range))
+      .filter((item) => reportStatus === 'all' || item.status === reportStatus)
+      .map((item) => {
+        const vehicle = vehicles.find((entry) => entry.id === item.vehicleId);
+        return {
+          Date: format(new Date(item.scheduledDate), 'MMM d, yyyy'),
+          'Plate Number': vehicle?.plateNumber ?? '-',
+          Vehicle: vehicle ? `${vehicle.brand} ${vehicle.model}` : '-',
+          'Service Type': item.serviceType,
+          Status: item.status,
+          'Cost (NGN)': item.cost,
+          Provider: item.serviceProvider ?? '-',
+        };
+      });
+
+    exportWorkbook({
+      filename: `maintenance-report-${new Date().toISOString().split('T')[0]}.xlsx`,
+      sheets: [
+        {
+          name: 'Maintenance',
+          rows,
+        },
+      ],
+    });
+    setIsReportModalOpen(false);
+    toast.success('Maintenance report downloaded');
+  };
+
   return (
     <div className="space-y-6">
       {/* Page header */}
@@ -218,7 +260,76 @@ export default function Maintenance() {
           <h1 className="text-2xl font-bold text-gray-900">Maintenance</h1>
           <p className="text-gray-500">Schedule and track vehicle maintenance</p>
         </div>
-        <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
+        <div className="flex gap-3">
+          <Dialog open={isReportModalOpen} onOpenChange={setIsReportModalOpen}>
+            <Button variant="outline" onClick={() => setIsReportModalOpen(true)}>
+              <Download className="w-4 h-4 mr-2" />
+              Generate Report
+            </Button>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Maintenance Report</DialogTitle>
+                <DialogDescription>
+                  Filter maintenance records by date range and status before exporting to Excel.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-2">
+                <div className="space-y-2">
+                  <Label>Period</Label>
+                  <Select value={reportPreset} onValueChange={(value) => setReportPreset(value as PeriodPreset)}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="7d">Last 7 days</SelectItem>
+                      <SelectItem value="30d">Last 30 days</SelectItem>
+                      <SelectItem value="60d">Last 60 days</SelectItem>
+                      <SelectItem value="90d">Last 90 days</SelectItem>
+                      <SelectItem value="365d">Last 12 months</SelectItem>
+                      <SelectItem value="all">All time</SelectItem>
+                      <SelectItem value="custom">Custom range</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {reportPreset === 'custom' && (
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="maintenanceReportStartDate">Start Date</Label>
+                      <Input id="maintenanceReportStartDate" type="date" value={customStartDate} onChange={(event) => setCustomStartDate(event.target.value)} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="maintenanceReportEndDate">End Date</Label>
+                      <Input id="maintenanceReportEndDate" type="date" value={customEndDate} onChange={(event) => setCustomEndDate(event.target.value)} />
+                    </div>
+                  </div>
+                )}
+                <div className="space-y-2">
+                  <Label>Status</Label>
+                  <Select value={reportStatus} onValueChange={(value) => setReportStatus(value as Maintenance['status'] | 'all')}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All statuses</SelectItem>
+                      <SelectItem value="Scheduled">Scheduled</SelectItem>
+                      <SelectItem value="In Progress">In Progress</SelectItem>
+                      <SelectItem value="Completed">Completed</SelectItem>
+                      <SelectItem value="Overdue">Overdue</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setIsReportModalOpen(false)}>
+                  Cancel
+                </Button>
+                <Button type="button" onClick={handleExportMaintenanceReport}>
+                  Download Excel
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+          <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
           {canManageRecords && (
             <DialogTrigger asChild>
               <Button>
@@ -326,6 +437,7 @@ export default function Maintenance() {
             </form>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       {/* Stats cards */}

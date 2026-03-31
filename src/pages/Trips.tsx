@@ -31,7 +31,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Plus, Route, TrendingUp } from 'lucide-react';
+import { Plus, Route, TrendingUp, Download } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import {
@@ -49,6 +49,8 @@ import {
   type LocationSuggestion,
   calculateRouteDistanceKm,
 } from '@/lib/location-search';
+import { exportWorkbook } from '@/lib/excel-export';
+import { dateFallsInRange, resolveDateRange, type PeriodPreset } from '@/lib/report-filters';
 
 export default function Trips() {
   const { canManageRecords } = useAuth();
@@ -56,11 +58,17 @@ export default function Trips() {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCalculatingDistance, setIsCalculatingDistance] = useState(false);
   const [chartData, setChartData] = useState<any[]>([]);
   const [startLocationSuggestion, setStartLocationSuggestion] = useState<LocationSuggestion | null>(null);
   const [destinationLocationSuggestion, setDestinationLocationSuggestion] = useState<LocationSuggestion | null>(null);
+  const [reportPreset, setReportPreset] = useState<PeriodPreset>('30d');
+  const [reportVehicleId, setReportVehicleId] = useState('all');
+  const [reportDriverId, setReportDriverId] = useState('all');
+  const [customStartDate, setCustomStartDate] = useState('');
+  const [customEndDate, setCustomEndDate] = useState('');
 
   // Form state
   const [formData, setFormData] = useState({
@@ -202,6 +210,43 @@ export default function Trips() {
   const totalDistance = trips.reduce((sum, trip) => sum + trip.distance, 0);
   const avgDistance = totalTrips > 0 ? totalDistance / totalTrips : 0;
 
+  const handleExportTripsReport = () => {
+    const range = resolveDateRange({
+      preset: reportPreset,
+      customStartDate,
+      customEndDate,
+    });
+    const rows = trips
+      .filter((trip) => dateFallsInRange(trip.date, range))
+      .filter((trip) => reportVehicleId === 'all' || trip.vehicleId === reportVehicleId)
+      .filter((trip) => reportDriverId === 'all' || trip.driverId === reportDriverId)
+      .map((trip) => {
+        const vehicle = vehicles.find((item) => item.id === trip.vehicleId);
+        const driver = drivers.find((item) => item.id === trip.driverId);
+        return {
+          Date: format(new Date(trip.date), 'MMM d, yyyy'),
+          'Plate Number': vehicle?.plateNumber ?? '-',
+          Driver: driver?.fullName ?? '-',
+          'Start Location': trip.startLocation,
+          Destination: trip.destination,
+          'Distance (km)': trip.distance,
+          Purpose: trip.purpose ?? '-',
+        };
+      });
+
+    exportWorkbook({
+      filename: `trips-report-${new Date().toISOString().split('T')[0]}.xlsx`,
+      sheets: [
+        {
+          name: 'Trips',
+          rows,
+        },
+      ],
+    });
+    setIsReportModalOpen(false);
+    toast.success('Trips report downloaded');
+  };
+
   return (
     <div className="space-y-6">
       {/* Page header */}
@@ -210,7 +255,93 @@ export default function Trips() {
           <h1 className="text-2xl font-bold text-gray-900">Trips</h1>
           <p className="text-gray-500">Log and track vehicle trips</p>
         </div>
-        <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
+        <div className="flex gap-3">
+          <Dialog open={isReportModalOpen} onOpenChange={setIsReportModalOpen}>
+            <Button variant="outline" onClick={() => setIsReportModalOpen(true)}>
+              <Download className="w-4 h-4 mr-2" />
+              Generate Report
+            </Button>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Trips Report</DialogTitle>
+                <DialogDescription>
+                  Filter trips by date range, vehicle, and driver before exporting to Excel.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-2">
+                <div className="space-y-2">
+                  <Label>Period</Label>
+                  <Select value={reportPreset} onValueChange={(value) => setReportPreset(value as PeriodPreset)}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="7d">Last 7 days</SelectItem>
+                      <SelectItem value="30d">Last 30 days</SelectItem>
+                      <SelectItem value="60d">Last 60 days</SelectItem>
+                      <SelectItem value="90d">Last 90 days</SelectItem>
+                      <SelectItem value="365d">Last 12 months</SelectItem>
+                      <SelectItem value="all">All time</SelectItem>
+                      <SelectItem value="custom">Custom range</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {reportPreset === 'custom' && (
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="tripsReportStartDate">Start Date</Label>
+                      <Input id="tripsReportStartDate" type="date" value={customStartDate} onChange={(event) => setCustomStartDate(event.target.value)} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="tripsReportEndDate">End Date</Label>
+                      <Input id="tripsReportEndDate" type="date" value={customEndDate} onChange={(event) => setCustomEndDate(event.target.value)} />
+                    </div>
+                  </div>
+                )}
+                <div className="space-y-2">
+                  <Label>Vehicle</Label>
+                  <Select value={reportVehicleId} onValueChange={setReportVehicleId}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All vehicles</SelectItem>
+                      {vehicles.map((vehicle) => (
+                        <SelectItem key={vehicle.id} value={vehicle.id}>
+                          {vehicle.plateNumber} - {vehicle.brand} {vehicle.model}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Driver</Label>
+                  <Select value={reportDriverId} onValueChange={setReportDriverId}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All drivers</SelectItem>
+                      {drivers.map((driver) => (
+                        <SelectItem key={driver.id} value={driver.id}>
+                          {driver.fullName}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setIsReportModalOpen(false)}>
+                  Cancel
+                </Button>
+                <Button type="button" onClick={handleExportTripsReport}>
+                  Download Excel
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+          <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
           {canManageRecords && (
             <DialogTrigger asChild>
               <Button>
@@ -341,6 +472,7 @@ export default function Trips() {
             </form>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       {/* Stats cards */}

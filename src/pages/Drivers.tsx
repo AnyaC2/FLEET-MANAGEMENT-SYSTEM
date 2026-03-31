@@ -31,10 +31,11 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Plus, Search, User, Eye } from 'lucide-react';
+import { Plus, Search, User, Eye, Download } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import { createDriver, listVehiclesAndDrivers, updateDriverStatus } from '@/lib/fleet-data';
+import { exportWorkbook } from '@/lib/excel-export';
 
 export default function Drivers() {
   const { canManageRecords } = useAuth();
@@ -151,6 +152,30 @@ export default function Drivers() {
       .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())[0];
   };
 
+  const handleExportDriversReport = () => {
+    exportWorkbook({
+      filename: `drivers-report-${new Date().toISOString().split('T')[0]}.xlsx`,
+      sheets: [
+        {
+          name: 'Drivers',
+          rows: filteredDrivers.map((driver) => {
+            const assignedVehicle = getAssignedVehicle(driver.id);
+            return {
+              'Full Name': driver.fullName,
+              'Phone Number': driver.phoneNumber,
+              Email: driver.email ?? '-',
+              'License Number': driver.licenseNumber,
+              'License Expiry': format(new Date(driver.licenseExpiry), 'MMM d, yyyy'),
+              Status: driver.status,
+              'Assigned Vehicle': assignedVehicle ? assignedVehicle.plateNumber : '-',
+            };
+          }),
+        },
+      ],
+    });
+    toast.success('Drivers report downloaded');
+  };
+
   return (
     <div className="space-y-6">
       {/* Page header */}
@@ -159,6 +184,11 @@ export default function Drivers() {
           <h1 className="text-2xl font-bold text-gray-900">Drivers</h1>
           <p className="text-gray-500">Manage your fleet drivers</p>
         </div>
+        <div className="flex gap-3">
+          <Button variant="outline" onClick={handleExportDriversReport}>
+            <Download className="w-4 h-4 mr-2" />
+            Export Excel
+          </Button>
         <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
           {canManageRecords && (
             <DialogTrigger asChild>
@@ -290,6 +320,7 @@ export default function Drivers() {
             </form>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       {/* Filters */}

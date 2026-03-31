@@ -31,7 +31,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Plus, FuelIcon, TrendingUp, Droplets } from 'lucide-react';
+import { Plus, FuelIcon, TrendingUp, Droplets, Download } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import {
@@ -44,14 +44,22 @@ import {
   ResponsiveContainer,
 } from 'recharts';
 import { createFuelLog, listFuelLogs, listOperationalVehicles } from '@/lib/fleet-data';
+import { exportWorkbook } from '@/lib/excel-export';
+import { dateFallsInRange, resolveDateRange, type PeriodPreset } from '@/lib/report-filters';
 
 export default function Fuel() {
   const { canManageRecords } = useAuth();
   const [fuelLogs, setFuelLogs] = useState<FuelLog[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [chartData, setChartData] = useState<any[]>([]);
+  const [reportPreset, setReportPreset] = useState<PeriodPreset>('30d');
+  const [reportVehicleId, setReportVehicleId] = useState('all');
+  const [reportType, setReportType] = useState<'transactions' | 'vehicle_summary' | 'spend_summary'>('transactions');
+  const [customStartDate, setCustomStartDate] = useState('');
+  const [customEndDate, setCustomEndDate] = useState('');
 
   // Form state
   const [formData, setFormData] = useState({
@@ -189,6 +197,99 @@ export default function Fuel() {
   const totalLiters = fuelLogs.reduce((sum, log) => sum + log.liters, 0);
   const avgCostPerLiter = totalLiters > 0 ? totalCost / totalLiters : 0;
 
+  const handleExportFuelReport = () => {
+    try {
+      const range = resolveDateRange({
+        preset: reportPreset,
+        customStartDate,
+        customEndDate,
+      });
+
+      const filteredLogs = fuelLogs.filter((log) => {
+        const matchesVehicle = reportVehicleId === 'all' || log.vehicleId === reportVehicleId;
+        const matchesRange = dateFallsInRange(log.date, range);
+        return matchesVehicle && matchesRange;
+      });
+
+      let rows: Array<Record<string, string | number>> = [];
+      let reportName = 'fuel-transactions';
+
+      if (reportType === 'transactions') {
+        rows = filteredLogs.map((log) => {
+          const vehicle = vehicles.find((item) => item.id === log.vehicleId);
+          return {
+            Date: format(new Date(log.date), 'MMM d, yyyy'),
+            'Plate Number': vehicle?.plateNumber ?? '-',
+            Vehicle: vehicle ? `${vehicle.brand} ${vehicle.model}` : '-',
+            Liters: log.liters,
+            'Cost (NGN)': log.cost,
+            'Odometer (km)': log.odometer,
+            Station: log.station ?? '-',
+          };
+        });
+      }
+
+      if (reportType === 'vehicle_summary') {
+        reportName = 'fuel-summary-by-vehicle';
+        rows = vehicles
+          .map((vehicle) => {
+            const vehicleLogs = filteredLogs.filter((log) => log.vehicleId === vehicle.id);
+            const totalVehicleLiters = vehicleLogs.reduce((sum, log) => sum + log.liters, 0);
+            const totalVehicleCost = vehicleLogs.reduce((sum, log) => sum + log.cost, 0);
+            return {
+              'Plate Number': vehicle.plateNumber,
+              Vehicle: `${vehicle.brand} ${vehicle.model}`,
+              'Purchases Count': vehicleLogs.length,
+              'Total Liters': totalVehicleLiters,
+              'Total Cost (NGN)': totalVehicleCost,
+              'Average Cost per Liter (NGN)': totalVehicleLiters > 0 ? Number((totalVehicleCost / totalVehicleLiters).toFixed(2)) : 0,
+            };
+          })
+          .filter((row) => row['Purchases Count'] > 0);
+      }
+
+      if (reportType === 'spend_summary') {
+        reportName = 'fuel-spend-summary';
+        const totalSpend = filteredLogs.reduce((sum, log) => sum + log.cost, 0);
+        const totalConsumed = filteredLogs.reduce((sum, log) => sum + log.liters, 0);
+        rows = [
+          {
+            Period:
+              reportPreset === 'custom' && customStartDate && customEndDate
+                ? `${customStartDate} to ${customEndDate}`
+                : reportPreset === 'all'
+                  ? 'All time'
+                  : reportPreset,
+            Vehicle:
+              reportVehicleId === 'all'
+                ? 'All vehicles'
+                : vehicles.find((vehicle) => vehicle.id === reportVehicleId)?.plateNumber ?? reportVehicleId,
+            'Fuel Purchases': filteredLogs.length,
+            'Total Liters': totalConsumed,
+            'Total Cost (NGN)': totalSpend,
+            'Average Cost per Liter (NGN)': totalConsumed > 0 ? Number((totalSpend / totalConsumed).toFixed(2)) : 0,
+          },
+        ];
+      }
+
+      exportWorkbook({
+        filename: `${reportName}-${new Date().toISOString().split('T')[0]}.xlsx`,
+        sheets: [
+          {
+            name: 'Fuel Report',
+            rows,
+          },
+        ],
+      });
+
+      setIsReportModalOpen(false);
+      toast.success('Fuel report downloaded');
+    } catch (error) {
+      console.error('Failed to export fuel report', error);
+      toast.error('Failed to export fuel report');
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Page header */}
@@ -197,8 +298,91 @@ export default function Fuel() {
           <h1 className="text-2xl font-bold text-gray-900">Fuel Management</h1>
           <p className="text-gray-500">Track fuel purchases and consumption</p>
         </div>
-        <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
-          {canManageRecords && (
+        <div className="flex gap-3">
+          <Dialog open={isReportModalOpen} onOpenChange={setIsReportModalOpen}>
+            <Button variant="outline" onClick={() => setIsReportModalOpen(true)}>
+              <Download className="w-4 h-4 mr-2" />
+              Generate Report
+            </Button>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Fuel Report</DialogTitle>
+                <DialogDescription>
+                  Generate downloadable Excel reports for fuel spending and consumption.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-2">
+                <div className="space-y-2">
+                  <Label>Report Type</Label>
+                  <Select value={reportType} onValueChange={(value) => setReportType(value as typeof reportType)}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="transactions">Fuel purchases in period</SelectItem>
+                      <SelectItem value="vehicle_summary">Fuel summary by vehicle</SelectItem>
+                      <SelectItem value="spend_summary">Overall spend summary</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Period</Label>
+                  <Select value={reportPreset} onValueChange={(value) => setReportPreset(value as PeriodPreset)}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="7d">Last 7 days</SelectItem>
+                      <SelectItem value="30d">Last 30 days</SelectItem>
+                      <SelectItem value="60d">Last 60 days</SelectItem>
+                      <SelectItem value="90d">Last 90 days</SelectItem>
+                      <SelectItem value="365d">Last 12 months</SelectItem>
+                      <SelectItem value="all">All time</SelectItem>
+                      <SelectItem value="custom">Custom range</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {reportPreset === 'custom' && (
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="fuelReportStartDate">Start Date</Label>
+                      <Input id="fuelReportStartDate" type="date" value={customStartDate} onChange={(event) => setCustomStartDate(event.target.value)} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="fuelReportEndDate">End Date</Label>
+                      <Input id="fuelReportEndDate" type="date" value={customEndDate} onChange={(event) => setCustomEndDate(event.target.value)} />
+                    </div>
+                  </div>
+                )}
+                <div className="space-y-2">
+                  <Label>Vehicle</Label>
+                  <Select value={reportVehicleId} onValueChange={setReportVehicleId}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All vehicles</SelectItem>
+                      {vehicles.map((vehicle) => (
+                        <SelectItem key={vehicle.id} value={vehicle.id}>
+                          {vehicle.plateNumber} - {vehicle.brand} {vehicle.model}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setIsReportModalOpen(false)}>
+                  Cancel
+                </Button>
+                <Button type="button" onClick={handleExportFuelReport}>
+                  Download Excel
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+          <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
+            {canManageRecords && (
             <DialogTrigger asChild>
               <Button>
                 <Plus className="w-4 h-4 mr-2" />
@@ -300,7 +484,8 @@ export default function Fuel() {
               </DialogFooter>
             </form>
           </DialogContent>
-        </Dialog>
+          </Dialog>
+        </div>
       </div>
 
       {/* Stats cards */}

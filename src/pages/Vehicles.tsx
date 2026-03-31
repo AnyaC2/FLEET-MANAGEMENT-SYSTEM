@@ -31,14 +31,17 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Plus, Search, Filter, Car, Eye } from 'lucide-react';
+import { Plus, Search, Filter, Car, Eye, Download } from 'lucide-react';
 import { toast } from 'sonner';
+import { format } from 'date-fns';
 import {
   createVehicle,
   findVehicleByPlateNumber,
+  listMaintenance,
   listVehicles,
   updateVehicleStatus,
 } from '@/lib/fleet-data';
+import { exportWorkbook } from '@/lib/excel-export';
 
 const vehicleTypes: VehicleType[] = ['Truck', 'Bus', 'SUV', 'Sedan', 'Van', 'Pickup', 'Motorcycle', 'Other'];
 const vehicleStatuses: VehicleStatus[] = ['Active', 'Idle', 'Under Maintenance', 'Decommissioned'];
@@ -51,7 +54,10 @@ export default function Vehicles() {
   const [statusFilter, setStatusFilter] = useState<VehicleStatus | 'all'>('all');
   const [typeFilter, setTypeFilter] = useState<VehicleType | 'all'>('all');
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [reportType, setReportType] = useState<'current_view' | 'maintenance_overdue' | 'under_maintenance' | 'decommissioned' | 'warranty_expiring'>('current_view');
+  const [reportThresholdDays, setReportThresholdDays] = useState('20');
 
   // Form state
   const [formData, setFormData] = useState({
@@ -190,6 +196,128 @@ export default function Vehicles() {
     return <Badge variant="outline" className={classes[status]}>{status}</Badge>;
   };
 
+  const formatDateValue = (value?: string) => (value ? format(new Date(value), 'MMM d, yyyy') : '-');
+
+  const handleExportVehiclesReport = async () => {
+    try {
+      const thresholdDays = Number.parseInt(reportThresholdDays, 10) || 0;
+      const maintenance = await listMaintenance();
+      const now = new Date();
+
+      let rows: Array<Record<string, string | number>> = [];
+      let reportName = 'vehicles-current-view';
+
+      if (reportType === 'current_view') {
+        rows = filteredVehicles.map((vehicle) => ({
+          'Plate Number': vehicle.plateNumber,
+          Brand: vehicle.brand,
+          Model: vehicle.model,
+          Type: vehicle.vehicleType,
+          Status: vehicle.status,
+          Year: vehicle.year,
+          'Current Odometer (km)': vehicle.currentOdometer ?? 0,
+          'Purchase Date': formatDateValue(vehicle.purchaseDate),
+          'Warranty Expiry': formatDateValue(vehicle.warrantyExpiry),
+        }));
+      }
+
+      if (reportType === 'under_maintenance') {
+        reportName = 'vehicles-under-maintenance';
+        rows = vehicles
+          .filter((vehicle) => vehicle.status === 'Under Maintenance')
+          .map((vehicle) => ({
+            'Plate Number': vehicle.plateNumber,
+            Brand: vehicle.brand,
+            Model: vehicle.model,
+            Type: vehicle.vehicleType,
+            Status: vehicle.status,
+            'Current Odometer (km)': vehicle.currentOdometer ?? 0,
+          }));
+      }
+
+      if (reportType === 'decommissioned') {
+        reportName = 'decommissioned-vehicles';
+        rows = vehicles
+          .filter((vehicle) => vehicle.status === 'Decommissioned')
+          .map((vehicle) => ({
+            'Plate Number': vehicle.plateNumber,
+            Brand: vehicle.brand,
+            Model: vehicle.model,
+            Type: vehicle.vehicleType,
+            Status: vehicle.status,
+            'Decommissioned As Of': format(new Date(), 'MMM d, yyyy'),
+          }));
+      }
+
+      if (reportType === 'warranty_expiring') {
+        reportName = `warranty-expiring-next-${thresholdDays}-days`;
+        rows = vehicles
+          .filter((vehicle) => {
+            if (!vehicle.warrantyExpiry) {
+              return false;
+            }
+            const diffDays = Math.floor((new Date(vehicle.warrantyExpiry).getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+            return diffDays >= 0 && diffDays <= thresholdDays;
+          })
+          .map((vehicle) => {
+            const diffDays = Math.floor((new Date(vehicle.warrantyExpiry!).getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+            return {
+              'Plate Number': vehicle.plateNumber,
+              Brand: vehicle.brand,
+              Model: vehicle.model,
+              'Warranty Expiry': formatDateValue(vehicle.warrantyExpiry),
+              'Days to Expiry': diffDays,
+              Status: vehicle.status,
+            };
+          });
+      }
+
+      if (reportType === 'maintenance_overdue') {
+        reportName = `vehicles-overdue-more-than-${thresholdDays}-days`;
+        rows = maintenance
+          .filter((item) => item.status === 'Overdue' || (item.status !== 'Completed' && new Date(item.scheduledDate).getTime() < now.getTime()))
+          .map((item) => {
+            const vehicle = vehicles.find((entry) => entry.id === item.vehicleId);
+            const daysOverdue = Math.max(
+              0,
+              Math.floor((now.getTime() - new Date(item.scheduledDate).getTime()) / (1000 * 60 * 60 * 24))
+            );
+            return {
+              vehicle,
+              item,
+              daysOverdue,
+            };
+          })
+          .filter((entry) => entry.vehicle && entry.daysOverdue >= thresholdDays)
+          .map(({ vehicle, item, daysOverdue }) => ({
+            'Plate Number': vehicle!.plateNumber,
+            Brand: vehicle!.brand,
+            Model: vehicle!.model,
+            'Service Type': item.serviceType,
+            'Scheduled Date': formatDateValue(item.scheduledDate),
+            'Days Overdue': daysOverdue,
+            Status: vehicle!.status,
+          }));
+      }
+
+      exportWorkbook({
+        filename: `${reportName}-${new Date().toISOString().split('T')[0]}.xlsx`,
+        sheets: [
+          {
+            name: 'Vehicles Report',
+            rows,
+          },
+        ],
+      });
+
+      setIsReportModalOpen(false);
+      toast.success('Vehicle report downloaded');
+    } catch (error) {
+      console.error('Failed to export vehicle report', error);
+      toast.error('Failed to export vehicle report');
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Page header */}
@@ -198,8 +326,61 @@ export default function Vehicles() {
           <h1 className="text-2xl font-bold text-gray-900">Vehicles</h1>
           <p className="text-gray-500">Manage your fleet vehicles</p>
         </div>
-        <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
-          {canManageRecords && (
+        <div className="flex gap-3">
+          <Dialog open={isReportModalOpen} onOpenChange={setIsReportModalOpen}>
+            <Button variant="outline" onClick={() => setIsReportModalOpen(true)}>
+              <Download className="w-4 h-4 mr-2" />
+              Generate Report
+            </Button>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Vehicle Report</DialogTitle>
+                <DialogDescription>
+                  Generate and download an Excel report for important vehicle conditions.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-2">
+                <div className="space-y-2">
+                  <Label>Report Type</Label>
+                  <Select value={reportType} onValueChange={(value) => setReportType(value as typeof reportType)}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="current_view">Current filtered vehicle view</SelectItem>
+                      <SelectItem value="maintenance_overdue">Vehicles overdue for maintenance</SelectItem>
+                      <SelectItem value="under_maintenance">Vehicles under maintenance</SelectItem>
+                      <SelectItem value="decommissioned">Decommissioned vehicles</SelectItem>
+                      <SelectItem value="warranty_expiring">Warranty expiring soon</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {(reportType === 'maintenance_overdue' || reportType === 'warranty_expiring') && (
+                  <div className="space-y-2">
+                    <Label htmlFor="reportThresholdDays">Range in Days</Label>
+                    <Input
+                      id="reportThresholdDays"
+                      type="number"
+                      min="1"
+                      value={reportThresholdDays}
+                      onChange={(event) => setReportThresholdDays(event.target.value)}
+                      placeholder="e.g. 20"
+                    />
+                  </div>
+                )}
+              </div>
+              <DialogFooter>
+                <Button type="button" variant="outline" onClick={() => setIsReportModalOpen(false)}>
+                  Cancel
+                </Button>
+                <Button type="button" onClick={() => void handleExportVehiclesReport()}>
+                  Download Excel
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+          <Dialog open={isAddModalOpen} onOpenChange={setIsAddModalOpen}>
+            {canManageRecords && (
             <DialogTrigger asChild>
               <Button>
                 <Plus className="w-4 h-4 mr-2" />
@@ -384,7 +565,8 @@ export default function Vehicles() {
               </DialogFooter>
             </form>
           </DialogContent>
-        </Dialog>
+          </Dialog>
+        </div>
       </div>
 
       {/* Filters */}

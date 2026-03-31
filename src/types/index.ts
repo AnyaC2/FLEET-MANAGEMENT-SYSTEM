@@ -147,7 +147,16 @@ export interface Trip {
 }
 
 // Document Types
-export type DocumentType = 'Registration' | 'Insurance' | 'Service Receipt' | 'Purchase Invoice' | 'License' | 'Other';
+export type DocumentAudience = 'vehicle' | 'driver';
+export type DocumentType = string;
+
+export interface DocumentTypeOption {
+  id: string;
+  name: string;
+  appliesTo: DocumentAudience | 'both';
+  createdAt: string;
+  isDefault?: boolean;
+}
 
 export interface Document {
   id: string;
