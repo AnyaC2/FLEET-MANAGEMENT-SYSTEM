@@ -188,6 +188,7 @@ export interface Notification {
 }
 
 export interface AppSettings {
+  emailNotifications: boolean;
   pushNotifications: boolean;
   maintenanceAlerts: boolean;
   fuelAlerts: boolean;
