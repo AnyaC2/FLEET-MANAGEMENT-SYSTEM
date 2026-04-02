@@ -92,8 +92,8 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY');
     const supabaseServiceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-    const office365User = Deno.env.get('OFFICE365_SMTP_USER');
-    const office365Password = Deno.env.get('OFFICE365_SMTP_PASSWORD');
+    const gmailUser = Deno.env.get('GMAIL_SMTP_USER');
+    const gmailAppPassword = Deno.env.get('GMAIL_SMTP_APP_PASSWORD');
     const notificationFromName = Deno.env.get('NOTIFICATION_FROM_NAME') ?? 'LFZ Fleet';
     const appUrl = Deno.env.get('APP_URL');
     const authHeader =
@@ -106,7 +106,7 @@ Deno.serve(async (req) => {
       throw new Error('Supabase function secrets are not configured');
     }
 
-    if (!office365User || !office365Password || !appUrl) {
+    if (!gmailUser || !gmailAppPassword || !appUrl) {
       return new Response(
         JSON.stringify({ error: 'Email notification service is not configured' }),
         {
@@ -210,12 +210,10 @@ Deno.serve(async (req) => {
     }
 
     const transporter = nodemailer.createTransport({
-      host: 'smtp.office365.com',
-      port: 587,
-      secure: false,
+      service: 'gmail',
       auth: {
-        user: office365User,
-        pass: office365Password,
+        user: gmailUser,
+        pass: gmailAppPassword,
       },
     });
 
@@ -224,7 +222,7 @@ Deno.serve(async (req) => {
     for (const profile of recipients) {
       try {
         await transporter.sendMail({
-          from: `"${notificationFromName}" <${office365User}>`,
+          from: `"${notificationFromName}" <${gmailUser}>`,
           to: profile.email,
           subject: `[LFZ Fleet] ${notification.title}`,
           html: buildEmailHtml(notification, profile.name, appUrl),
