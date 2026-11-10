@@ -25,17 +25,16 @@ type ProfileRow = {
   } | null;
 };
 
-function decodeJwtPayload(token: string) {
-  const [, payload] = token.split('.');
-  if (!payload) {
-    throw new Error('Invalid access token');
-  }
-
-  const normalized = payload.replace(/-/g, '+').replace(/_/g, '/');
-  const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=');
-  const decoded = atob(padded);
-  return JSON.parse(decoded) as { sub?: string; subject?: string };
-}
+type EmailFailure = {
+  notificationId: string;
+  profileId: string;
+  email: string;
+  message: string;
+  code?: string;
+  responseCode?: number;
+  command?: string;
+  response?: string;
+};
 
 function escapeHtml(value: string) {
   return value
@@ -83,6 +82,30 @@ function buildEmailHtml(notification: NotificationRow, recipientName: string | n
   `;
 }
 
+function getEmailFailureDetails(
+  notificationId: string,
+  profile: Pick<ProfileRow, 'id' | 'email'>,
+  error: unknown
+): EmailFailure {
+  const details = error && typeof error === 'object' ? (error as Record<string, unknown>) : {};
+
+  return {
+    notificationId,
+    profileId: profile.id,
+    email: profile.email,
+    message: error instanceof Error ? error.message : String(error),
+    code: typeof details.code === 'string' ? details.code : undefined,
+    responseCode:
+      typeof details.responseCode === 'number'
+        ? details.responseCode
+        : typeof details.responseCode === 'string'
+          ? Number(details.responseCode)
+          : undefined,
+    command: typeof details.command === 'string' ? details.command : undefined,
+    response: typeof details.response === 'string' ? details.response : undefined,
+  };
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -90,7 +113,6 @@ Deno.serve(async (req) => {
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY');
     const supabaseServiceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
     const gmailUser = Deno.env.get('GMAIL_SMTP_USER');
     const gmailAppPassword = Deno.env.get('GMAIL_SMTP_APP_PASSWORD');
@@ -102,7 +124,7 @@ Deno.serve(async (req) => {
       req.headers.get('Authorization') ??
       req.headers.get('x-forwarded-authorization');
 
-    if (!supabaseUrl || !supabaseAnonKey || !supabaseServiceRoleKey) {
+    if (!supabaseUrl || !supabaseServiceRoleKey) {
       throw new Error('Supabase function secrets are not configured');
     }
 
@@ -131,16 +153,20 @@ Deno.serve(async (req) => {
       });
     }
 
-    const jwtPayload = decodeJwtPayload(accessToken);
-    const requestingUserId = jwtPayload.sub ?? jwtPayload.subject;
-    if (!requestingUserId) {
+    const adminClient = createClient(supabaseUrl, supabaseServiceRoleKey);
+    const {
+      data: { user: requestingUser },
+      error: authError,
+    } = await adminClient.auth.getUser(accessToken);
+
+    if (authError || !requestingUser) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
-    const adminClient = createClient(supabaseUrl, supabaseServiceRoleKey);
+    const requestingUserId = requestingUser.id;
 
     const { data: requesterProfile, error: requesterProfileError } = await adminClient
       .from('profiles')
@@ -218,6 +244,7 @@ Deno.serve(async (req) => {
     });
 
     let sentCount = 0;
+    const failures: EmailFailure[] = [];
 
     for (const profile of recipients) {
       try {
@@ -241,12 +268,17 @@ Deno.serve(async (req) => {
           console.error('Failed to record notification email delivery', deliveryInsertError);
         }
       } catch (error) {
-        console.error('Failed to send notification email', {
-          notificationId: notification.id,
-          profileId: profile.id,
-          errorText: error instanceof Error ? error.message : String(error),
-        });
+        const failure = getEmailFailureDetails(notification.id, profile, error);
+        failures.push(failure);
+        console.error('Failed to send notification email', failure);
       }
+    }
+
+    if (sentCount === 0 && failures.length > 0) {
+      return new Response(JSON.stringify({ error: 'All notification emails failed', failures }), {
+        status: 502,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
     }
 
     return new Response(JSON.stringify({ success: true, sent: sentCount }), {

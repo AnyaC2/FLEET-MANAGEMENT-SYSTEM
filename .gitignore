@@ -10,14 +10,17 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+.codex/
+.vscode/
+supabase/.temp/
+docs/__pycache__/
+*.pyc
 .env
 .env.*
 !.env.example
 *.local
 
 # Editor directories and files
-.vscode/*
-!.vscode/extensions.json
 .idea
 .DS_Store
 *.suo

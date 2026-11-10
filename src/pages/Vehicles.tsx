@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import type { Vehicle, VehicleStatus, VehicleType } from '@/types';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/context/AuthContext';
@@ -7,6 +7,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { RegisterPagination } from '@/components/RegisterPagination';
 import {
   Dialog,
   DialogContent,
@@ -49,10 +51,16 @@ const editableVehicleStatuses: VehicleStatus[] = ['Active', 'Idle', 'Decommissio
 
 export default function Vehicles() {
   const { canManageRecords } = useAuth();
+  const [searchParams] = useSearchParams();
+  const requestedStatus = searchParams.get('status') as VehicleStatus | null;
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<VehicleStatus | 'all'>('all');
+  const [statusFilter, setStatusFilter] = useState<VehicleStatus | 'all'>(() =>
+    requestedStatus && vehicleStatuses.includes(requestedStatus) ? requestedStatus : 'all'
+  );
   const [typeFilter, setTypeFilter] = useState<VehicleType | 'all'>('all');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -94,6 +102,12 @@ export default function Vehicles() {
     const matchesType = typeFilter === 'all' || vehicle.vehicleType === typeFilter;
     return matchesSearch && matchesStatus && matchesType;
   });
+  const vehiclePageCount = Math.max(1, Math.ceil(filteredVehicles.length / pageSize));
+  const visibleVehiclePage = Math.min(currentPage, vehiclePageCount);
+  const paginatedVehicles = filteredVehicles.slice(
+    (visibleVehiclePage - 1) * pageSize,
+    visibleVehiclePage * pageSize
+  );
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -151,7 +165,7 @@ export default function Vehicles() {
       setIsAddModalOpen(false);
       resetForm();
       await loadVehicles();
-    } catch (error) {
+    } catch {
       toast.error('Failed to add vehicle');
     } finally {
       setIsSubmitting(false);
@@ -181,7 +195,7 @@ export default function Vehicles() {
       await updateVehicleStatus(vehicleId, status);
       toast.success(`Vehicle marked ${status.toLowerCase()}`);
       await loadVehicles();
-    } catch (error) {
+    } catch {
       toast.error('Failed to update vehicle status');
     }
   };
@@ -319,14 +333,14 @@ export default function Vehicles() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {/* Page header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="lfz-enter flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Vehicles</h1>
-          <p className="text-gray-500">Manage your fleet vehicles</p>
+          <h1 className="text-3xl font-semibold tracking-[-0.035em] text-gray-900 sm:text-[2.25rem]">Vehicles</h1>
+          <p className="mt-1.5 text-sm text-gray-500">Manage fleet assets, readiness, and service status.</p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-2.5">
           <Dialog open={isReportModalOpen} onOpenChange={setIsReportModalOpen}>
             <Button variant="outline" onClick={() => setIsReportModalOpen(true)}>
               <Download className="w-4 h-4 mr-2" />
@@ -396,7 +410,7 @@ export default function Vehicles() {
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSubmit}>
-              <div className="grid grid-cols-2 gap-4 py-4">
+              <div className="grid grid-cols-1 gap-4 py-4 sm:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="plateNumber">Plate Number *</Label>
                   <Input
@@ -478,61 +492,6 @@ export default function Vehicles() {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="vin">VIN Number</Label>
-                  <Input
-                    id="vin"
-                    name="vin"
-                    value={formData.vin}
-                    onChange={handleInputChange}
-                    placeholder="Enter 17-digit VIN"
-                    maxLength={17}
-                  />
-                  {formData.vin && formData.vin.length !== 17 && (
-                    <p className="text-xs text-red-500">VIN must be exactly 17 characters</p>
-                  )}
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="engineNumber">Engine Number</Label>
-                  <Input
-                    id="engineNumber"
-                    name="engineNumber"
-                    value={formData.engineNumber}
-                    onChange={handleInputChange}
-                    placeholder="Enter engine number"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="purchaseDate">Purchase Date</Label>
-                  <Input
-                    id="purchaseDate"
-                    name="purchaseDate"
-                    type="date"
-                    value={formData.purchaseDate}
-                    onChange={handleInputChange}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="purchaseCost">Purchase Cost (₦)</Label>
-                  <Input
-                    id="purchaseCost"
-                    name="purchaseCost"
-                    type="number"
-                    value={formData.purchaseCost}
-                    onChange={handleInputChange}
-                    placeholder="e.g., 45000000"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="vendor">Vendor</Label>
-                  <Input
-                    id="vendor"
-                    name="vendor"
-                    value={formData.vendor}
-                    onChange={handleInputChange}
-                    placeholder="e.g., Toyota Nigeria Limited"
-                  />
-                </div>
-                <div className="space-y-2">
                   <Label htmlFor="currentOdometer">Current Odometer (km)</Label>
                   <Input
                     id="currentOdometer"
@@ -544,16 +503,45 @@ export default function Vehicles() {
                     placeholder="e.g., 15234"
                   />
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="warrantyExpiry">Warranty Expiry</Label>
-                  <Input
-                    id="warrantyExpiry"
-                    name="warrantyExpiry"
-                    type="date"
-                    value={formData.warrantyExpiry}
-                    onChange={handleInputChange}
-                  />
-                </div>
+                <Accordion type="single" collapsible className="sm:col-span-2 rounded-xl border border-gray-200 px-4">
+                  <AccordionItem value="additional" className="border-0">
+                    <AccordionTrigger className="hover:no-underline">
+                      <span>
+                        Additional details
+                        <span className="mt-1 block text-xs font-normal text-gray-500">VIN, purchase, vendor and warranty information</span>
+                      </span>
+                    </AccordionTrigger>
+                    <AccordionContent>
+                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <div className="space-y-2">
+                          <Label htmlFor="vin">VIN Number</Label>
+                          <Input id="vin" name="vin" value={formData.vin} onChange={handleInputChange} placeholder="Enter 17-character VIN" maxLength={17} />
+                          {formData.vin && formData.vin.length !== 17 && <p className="text-xs text-red-500">VIN must be exactly 17 characters</p>}
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="engineNumber">Engine Number</Label>
+                          <Input id="engineNumber" name="engineNumber" value={formData.engineNumber} onChange={handleInputChange} placeholder="Enter engine number" />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="purchaseDate">Purchase Date</Label>
+                          <Input id="purchaseDate" name="purchaseDate" type="date" value={formData.purchaseDate} onChange={handleInputChange} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="purchaseCost">Purchase Cost (₦)</Label>
+                          <Input id="purchaseCost" name="purchaseCost" type="number" value={formData.purchaseCost} onChange={handleInputChange} placeholder="e.g., 45000000" />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="vendor">Vendor</Label>
+                          <Input id="vendor" name="vendor" value={formData.vendor} onChange={handleInputChange} placeholder="e.g., Toyota Nigeria Limited" />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="warrantyExpiry">Warranty Expiry</Label>
+                          <Input id="warrantyExpiry" name="warrantyExpiry" type="date" value={formData.warrantyExpiry} onChange={handleInputChange} />
+                        </div>
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
+                </Accordion>
               </div>
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setIsAddModalOpen(false)}>
@@ -570,26 +558,27 @@ export default function Vehicles() {
       </div>
 
       {/* Filters */}
-      <Card>
-        <CardContent className="p-4">
+      <Card className="gap-0 overflow-hidden py-0">
+        <CardContent className="border-b border-gray-200 p-4">
           <div className="flex flex-col sm:flex-row gap-4">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <Input
                 placeholder="Search by plate, brand, or model..."
+                aria-label="Search vehicles"
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
                 className="pl-10"
               />
             </div>
-            <div className="flex gap-2">
-              <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as VehicleStatus | 'all')}>
-                <SelectTrigger className="w-40">
-                  <Filter className="w-4 h-4 mr-2" />
+            <div className="grid grid-cols-2 gap-2 sm:flex">
+              <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v as VehicleStatus | 'all'); setCurrentPage(1); }}>
+                <SelectTrigger aria-label="Filter vehicles by status" className="w-full min-w-0 sm:w-40">
+                  <Filter className="hidden h-4 w-4 sm:block" />
                   <SelectValue placeholder="Status" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
+                  <SelectItem value="all">All statuses</SelectItem>
                   {vehicleStatuses.map((status) => (
                     <SelectItem key={status} value={status}>
                       {status}
@@ -597,9 +586,9 @@ export default function Vehicles() {
                   ))}
                 </SelectContent>
               </Select>
-              <Select value={typeFilter} onValueChange={(v) => setTypeFilter(v as VehicleType | 'all')}>
-                <SelectTrigger className="w-40">
-                  <Car className="w-4 h-4 mr-2" />
+              <Select value={typeFilter} onValueChange={(v) => { setTypeFilter(v as VehicleType | 'all'); setCurrentPage(1); }}>
+                <SelectTrigger aria-label="Filter vehicles by type" className="w-full min-w-0 sm:w-40">
+                  <Car className="hidden h-4 w-4 sm:block" />
                   <SelectValue placeholder="Type" />
                 </SelectTrigger>
                 <SelectContent>
@@ -614,10 +603,14 @@ export default function Vehicles() {
             </div>
           </div>
         </CardContent>
-      </Card>
-
-      {/* Vehicles table */}
-      <Card>
+        <div className="flex flex-wrap items-center justify-between gap-2 px-5 py-3 text-sm text-gray-500" role="status">
+          <span>{filteredVehicles.length} of {vehicles.length} vehicles</span>
+          {(searchQuery || statusFilter !== 'all' || typeFilter !== 'all') && (
+            <Button variant="ghost" size="sm" onClick={() => { setSearchQuery(''); setStatusFilter('all'); setTypeFilter('all'); setCurrentPage(1); }}>
+              Clear filters
+            </Button>
+          )}
+        </div>
         <CardContent className="p-0">
           <Table>
             <TableHeader>
@@ -635,13 +628,14 @@ export default function Vehicles() {
               {filteredVehicles.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={7} className="text-center py-8 text-gray-500">
-                    No vehicles found
+                    <p className="font-medium text-gray-900">{vehicles.length ? 'No matching vehicles' : 'No vehicles registered yet'}</p>
+                    <p className="mt-1 text-sm">{vehicles.length ? 'Try a different plate number or clear the filters.' : 'Vehicle details will appear here after a vehicle is added or imported.'}</p>
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredVehicles.map((vehicle) => (
+                paginatedVehicles.map((vehicle) => (
                   <TableRow key={vehicle.id}>
-                    <TableCell className="font-medium">{vehicle.plateNumber}</TableCell>
+                    <TableCell className="font-medium"><Link className="text-primary hover:underline" to={`/vehicles/${vehicle.id}`}>{vehicle.plateNumber}</Link></TableCell>
                     <TableCell>
                       {vehicle.brand} {vehicle.model}
                     </TableCell>
@@ -658,7 +652,7 @@ export default function Vehicles() {
                             value={vehicle.status}
                             onValueChange={(value) => void handleStatusChange(vehicle.id, value as VehicleStatus)}
                           >
-                            <SelectTrigger className="w-32">
+                            <SelectTrigger aria-label={`Change status for ${vehicle.plateNumber}`} className="w-32">
                               <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
@@ -670,11 +664,11 @@ export default function Vehicles() {
                             </SelectContent>
                           </Select>
                         )}
-                        <Link to={`/vehicles/${vehicle.id}`}>
-                          <Button variant="ghost" size="icon">
+                          <Button asChild variant="ghost" size="icon">
+                            <Link to={`/vehicles/${vehicle.id}`} aria-label={`View ${vehicle.plateNumber}`}>
                             <Eye className="w-4 h-4" />
+                            </Link>
                           </Button>
-                        </Link>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -683,6 +677,14 @@ export default function Vehicles() {
             </TableBody>
           </Table>
         </CardContent>
+        <RegisterPagination
+          currentPage={visibleVehiclePage}
+          itemLabel="vehicles"
+          onPageChange={setCurrentPage}
+          onPageSizeChange={(size) => { setPageSize(size); setCurrentPage(1); }}
+          pageSize={pageSize}
+          totalItems={filteredVehicles.length}
+        />
       </Card>
     </div>
   );

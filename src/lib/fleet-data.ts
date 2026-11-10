@@ -891,6 +891,21 @@ export async function listAssignmentsByDriver(driverId: string): Promise<Assignm
   );
 }
 
+export async function listAssignments(): Promise<Assignment[]> {
+  return withSupabaseRead(
+    () => db.assignments.getAll(),
+    async () => {
+      const { data, error } = await supabase!
+        .from('assignments')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      return (data as AssignmentRow[]).map(mapAssignmentRow);
+    }
+  );
+}
+
 export async function updateVehicleCurrentDriver(
   vehicleId: string,
   currentDriverId: string | undefined
@@ -1188,7 +1203,10 @@ export async function createDriver(driver: Driver): Promise<Driver> {
   );
 }
 
-export async function createIncident(incident: Incident): Promise<Incident> {
+export async function createIncident(
+  incident: Incident,
+  options?: { suppressNotification?: boolean }
+): Promise<Incident> {
   const createdIncident = await withSupabaseWrite(
     () => db.incidents.create(incident),
     async () => {
@@ -1202,6 +1220,10 @@ export async function createIncident(incident: Incident): Promise<Incident> {
       return mapIncidentRow(data as IncidentRow);
     }
   );
+
+  if (options?.suppressNotification) {
+    return createdIncident;
+  }
 
   try {
     const settings = await loadCurrentUserSettings();

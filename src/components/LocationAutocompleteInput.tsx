@@ -28,8 +28,6 @@ export function LocationAutocompleteInput({
     const trimmedValue = value.trim();
 
     if (trimmedValue.length < 3) {
-      setSuggestions([]);
-      setIsLoading(false);
       return;
     }
 
@@ -63,8 +61,13 @@ export function LocationAutocompleteInput({
         id={id}
         value={value}
         onChange={(e) => {
-          onChangeText(e.target.value);
+          const nextValue = e.target.value;
+          onChangeText(nextValue);
           onLocationSelect(null);
+          if (nextValue.trim().length < 3) {
+            setSuggestions([]);
+            setIsLoading(false);
+          }
           setIsOpen(true);
         }}
         onFocus={() => {
@@ -79,7 +82,7 @@ export function LocationAutocompleteInput({
         disabled={disabled}
         autoComplete="off"
       />
-      {isOpen && (suggestions.length > 0 || isLoading) && (
+      {value.trim().length >= 3 && isOpen && (suggestions.length > 0 || isLoading) && (
         <div className="absolute z-50 mt-1 w-full rounded-md border bg-white shadow-lg">
           {isLoading ? (
             <div className="px-3 py-2 text-sm text-gray-500">Searching locations...</div>

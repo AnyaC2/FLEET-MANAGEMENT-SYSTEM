@@ -43,4 +43,6 @@ function Badge({
   )
 }
 
+// The variant helper is shared by badge-shaped links and status controls.
+// eslint-disable-next-line react-refresh/only-export-components
 export { Badge, badgeVariants }

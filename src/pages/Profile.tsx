@@ -325,11 +325,11 @@ export default function Profile() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {/* Page header */}
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">Profile</h1>
-        <p className="text-gray-500">Manage your account information</p>
+      <div className="lfz-enter">
+        <h1 className="text-3xl font-semibold tracking-[-0.035em] text-gray-900 sm:text-[2.25rem]">Profile</h1>
+        <p className="mt-1.5 text-sm text-gray-500">Manage your identity and account security.</p>
       </div>
 
       {/* Profile card */}

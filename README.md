@@ -1,73 +1,108 @@
-# React + TypeScript + Vite
+# LFZDC Fleet Management System
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+An internal fleet operations and records management application developed for Lekki Free Zone Development Company (LFZDC). The system centralizes vehicle, driver, trip, fuel, maintenance, incident, document, reporting, user-access, and historical data-import workflows.
 
-Currently, two official plugins are available:
+## Core Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+- Fleet dashboard with operational summaries and drill-down links
+- Vehicle and driver registration, status management, and assignments
+- Trip, fuel, maintenance, incident, and odometer records
+- Vehicle and driver document management
+- Excel workbook import with preview, mapping, validation, and import history
+- Excel report exports and management reporting
+- Role-based access for administrators, managers, and viewers
+- Supabase authentication, multi-factor authentication, storage, and PostgreSQL data
+- In-app and optional email notifications
 
-## React Compiler
+## Technology
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- React 19 and TypeScript
+- Vite 8
+- Tailwind CSS 4
+- Supabase Auth, PostgreSQL, Storage, and Edge Functions
+- Recharts for dashboard reporting
+- SheetJS for Excel import and export
 
-## Expanding the ESLint configuration
+## Requirements
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+- Node.js 20 or newer
+- npm
+- Internet access to the configured Supabase project
+- A Supabase user account and corresponding record in the `profiles` table
 
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
+## Quick Start
 
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
+1. Open a terminal in the project folder.
+2. Install the dependencies:
 
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+   ```bash
+   npm install
+   ```
+
+3. Create `.env.local` from `.env.example` and enter the Supabase project URL and anonymous key:
+
+   ```env
+   VITE_SUPABASE_URL=https://your-project-ref.supabase.co
+   VITE_SUPABASE_ANON_KEY=your-anon-key
+   ```
+
+4. Start the application:
+
+   ```bash
+   npm run dev
+   ```
+
+5. Open the local address shown in the terminal, normally `http://localhost:5173`.
+
+## Verification
+
+Run the complete source check before deployment or submission:
+
+```bash
+npm run check
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+The command runs the linter, TypeScript compiler, and production build.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## Available Commands
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+| Command | Purpose |
+| --- | --- |
+| `npm run dev` | Start the local development server |
+| `npm run build` | Create a production build in `dist/` |
+| `npm run preview` | Preview the production build locally |
+| `npm run lint` | Check the source code for lint errors |
+| `npm run check` | Run linting and the production build |
+
+## Project Structure
+
+```text
+public/                 Static images, logo, and notification audio
+src/components/         Shared application and interface components
+src/context/            Authentication and authorization context
+src/lib/                Data access, imports, exports, rules, and utilities
+src/pages/              Application screens and operational modules
+src/types/              Shared TypeScript data definitions
+supabase/               Database scripts, policies, and Edge Functions
+database-submission/    Numbered SQL package for academic submission
+docs/                   Backend and API documentation
 ```
+
+## Database
+
+The application uses PostgreSQL through Supabase. The primary development scripts are in `supabase/`. A portable, numbered database package is provided in `database-submission/` and includes the schema, role policies, storage configuration, and fictional demonstration data.
+
+See [database-submission/README.md](database-submission/README.md) for the restoration order and submission notes.
+
+## Additional Documentation
+
+- [Backend documentation](docs/backend-documentation.md)
+- [API and data-access documentation](docs/api-documentation.md)
+
+## Submission and Security Notes
+
+- Do not submit `.env.local`, database passwords, service-role keys, SMTP passwords, or personal credentials.
+- `.env.example` contains placeholders only and is safe to submit.
+- Hosted Supabase users, password hashes, and uploaded files are intentionally excluded from the database submission package.
+- The sample SQL records are fictional and intended for demonstration and assessment.
+- A lecturer testing the hosted version will need internet access and test credentials supplied separately.

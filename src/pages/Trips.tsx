@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { RegisterPagination } from '@/components/RegisterPagination';
 import {
   Dialog,
   DialogContent,
@@ -31,7 +32,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Plus, Route, TrendingUp, Download } from 'lucide-react';
+import { Plus, Download, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import {
@@ -57,11 +58,15 @@ export default function Trips() {
   const [trips, setTrips] = useState<Trip[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [drivers, setDrivers] = useState<Driver[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [periodFilter, setPeriodFilter] = useState<'all' | '7d' | '30d' | '90d'>('all');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCalculatingDistance, setIsCalculatingDistance] = useState(false);
-  const [chartData, setChartData] = useState<any[]>([]);
+  const [chartData, setChartData] = useState<{ day: string; trips: number; distance: number }[]>([]);
   const [startLocationSuggestion, setStartLocationSuggestion] = useState<LocationSuggestion | null>(null);
   const [destinationLocationSuggestion, setDestinationLocationSuggestion] = useState<LocationSuggestion | null>(null);
   const [reportPreset, setReportPreset] = useState<PeriodPreset>('30d');
@@ -143,6 +148,21 @@ export default function Trips() {
     setChartData(data);
   };
 
+  const filteredTrips = trips.filter((trip) => {
+    const vehicle = vehicles.find((item) => item.id === trip.vehicleId);
+    const driver = drivers.find((item) => item.id === trip.driverId);
+    const query = searchQuery.trim().toLowerCase();
+    const matchesSearch = !query || [vehicle?.plateNumber, driver?.fullName, trip.startLocation, trip.destination, trip.purpose]
+      .some((value) => value?.toLowerCase().includes(query));
+    const tripDate = new Date(trip.date);
+    const daysAgo = (Date.now() - tripDate.getTime()) / 86_400_000;
+    const matchesPeriod = periodFilter === 'all' || (daysAgo >= 0 && daysAgo <= Number(periodFilter.replace('d', '')));
+    return matchesSearch && matchesPeriod;
+  });
+  const tripPageCount = Math.max(1, Math.ceil(filteredTrips.length / pageSize));
+  const visibleTripPage = Math.min(currentPage, tripPageCount);
+  const paginatedTrips = filteredTrips.slice((visibleTripPage - 1) * pageSize, visibleTripPage * pageSize);
+
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
@@ -184,7 +204,7 @@ export default function Trips() {
       setIsAddModalOpen(false);
       resetForm();
       await loadData();
-    } catch (error) {
+    } catch {
       toast.error('Failed to log trip');
     } finally {
       setIsSubmitting(false);
@@ -248,14 +268,14 @@ export default function Trips() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {/* Page header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="lfz-enter flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Trips</h1>
-          <p className="text-gray-500">Log and track vehicle trips</p>
+          <h1 className="text-3xl font-semibold tracking-[-0.035em] text-gray-900 sm:text-[2.25rem]">Trips</h1>
+          <p className="mt-1.5 text-sm text-gray-500">Monitor journeys, distance covered, and assigned personnel.</p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-2.5">
           <Dialog open={isReportModalOpen} onOpenChange={setIsReportModalOpen}>
             <Button variant="outline" onClick={() => setIsReportModalOpen(true)}>
               <Download className="w-4 h-4 mr-2" />
@@ -476,64 +496,32 @@ export default function Trips() {
       </div>
 
       {/* Stats cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-500">Total Trips</p>
-                <p className="text-2xl font-bold">{totalTrips}</p>
-              </div>
-              <div className="w-12 h-12 bg-blue-500/10 rounded-lg flex items-center justify-center">
-                <Route className="w-6 h-6 text-blue-500" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-500">Total Distance</p>
-                <p className="text-2xl font-bold">{totalDistance.toLocaleString()} km</p>
-              </div>
-              <div className="w-12 h-12 bg-green-500/10 rounded-lg flex items-center justify-center">
-                <TrendingUp className="w-6 h-6 text-green-500" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-500">Avg. Distance/Trip</p>
-                <p className="text-2xl font-bold">{avgDistance.toFixed(1)} km</p>
-              </div>
-              <div className="w-12 h-12 bg-amber-500/10 rounded-lg flex items-center justify-center">
-                <Route className="w-6 h-6 text-amber-500" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      <dl className="lfz-summary-strip" aria-label="Trip totals, all recorded trips">
+        <div><dt>Trips recorded <span className="text-xs">/ all time</span></dt><dd>{totalTrips}</dd></div>
+        <div><dt>Total distance</dt><dd>{totalDistance.toLocaleString()} <span className="text-base font-normal text-gray-500">km</span></dd></div>
+        <div><dt>Average distance per trip</dt><dd>{avgDistance.toFixed(1)} <span className="text-base font-normal text-gray-500">km</span></dd></div>
+      </dl>
 
       {/* Chart */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">Trip Activity (Last 7 Days)</CardTitle>
+          <CardTitle className="text-lg">Trip activity · last 7 days</CardTitle>
+          <div className="flex flex-wrap gap-4 text-xs text-gray-600">
+            <span className="flex items-center gap-2"><span className="h-2 w-2 rounded-sm bg-[#15247f]" />Trips · left axis</span>
+            <span className="flex items-center gap-2"><span className="h-2 w-2 rounded-sm bg-[#00864a]" />Distance (km) · right axis</span>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} initialDimension={{ width: 720, height: 256 }}>
               <BarChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="day" />
-                <YAxis yAxisId="left" />
-                <YAxis yAxisId="right" orientation="right" />
+                <CartesianGrid vertical={false} stroke="#e7e9ee" strokeDasharray="3 4" />
+                <XAxis dataKey="day" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#6b7280' }} />
+                <YAxis yAxisId="left" allowDecimals={false} axisLine={false} tickLine={false} width={44} tick={{ fontSize: 11, fill: '#6b7280' }} />
+                <YAxis yAxisId="right" orientation="right" axisLine={false} tickLine={false} width={44} tick={{ fontSize: 11, fill: '#6b7280' }} />
                 <Tooltip />
-                <Bar yAxisId="left" dataKey="trips" fill="#3b82f6" name="Trips" radius={[4, 4, 0, 0]} />
-                <Bar yAxisId="right" dataKey="distance" fill="#10b981" name="Distance (km)" radius={[4, 4, 0, 0]} />
+                <Bar yAxisId="left" dataKey="trips" fill="#15247f" name="Trips" radius={[5, 5, 0, 0]} />
+                <Bar yAxisId="right" dataKey="distance" fill="#00864a" name="Distance (km)" radius={[5, 5, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -541,9 +529,24 @@ export default function Trips() {
       </Card>
 
       {/* Trips table */}
-      <Card>
-        <CardHeader>
+      <Card className="gap-0 overflow-hidden py-0">
+        <CardHeader className="border-b border-gray-100 py-5">
           <CardTitle className="text-lg">Trip History</CardTitle>
+          <div className="mt-3 flex flex-col gap-3 sm:flex-row">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+              <Input aria-label="Search trip records" className="pl-10" placeholder="Search plate, driver, route, or purpose..." value={searchQuery} onChange={(event) => { setSearchQuery(event.target.value); setCurrentPage(1); }} />
+            </div>
+            <Select value={periodFilter} onValueChange={(value) => { setPeriodFilter(value as typeof periodFilter); setCurrentPage(1); }}>
+              <SelectTrigger className="w-full sm:w-40" aria-label="Filter trips by period"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All dates</SelectItem>
+                <SelectItem value="7d">Last 7 days</SelectItem>
+                <SelectItem value="30d">Last 30 days</SelectItem>
+                <SelectItem value="90d">Last 90 days</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </CardHeader>
         <CardContent className="p-0">
           <Table>
@@ -559,14 +562,14 @@ export default function Trips() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {trips.length === 0 ? (
+              {filteredTrips.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={7} className="text-center py-8 text-gray-500">
-                    No trip records
+                    {trips.length ? 'No trip records match these filters' : 'No trip records'}
                   </TableCell>
                 </TableRow>
               ) : (
-                trips.map((trip) => {
+                paginatedTrips.map((trip) => {
                   const vehicle = vehicles.find((v) => v.id === trip.vehicleId);
                   const driver = drivers.find((d) => d.id === trip.driverId);
                   return (
@@ -595,6 +598,7 @@ export default function Trips() {
             </TableBody>
           </Table>
         </CardContent>
+        <RegisterPagination currentPage={visibleTripPage} itemLabel="trips" onPageChange={setCurrentPage} onPageSizeChange={(size) => { setPageSize(size); setCurrentPage(1); }} pageSize={pageSize} totalItems={filteredTrips.length} />
       </Card>
     </div>
   );

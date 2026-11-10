@@ -1,3 +1,4 @@
+@import "@fontsource-variable/geist";
 @import "tailwindcss";
 @plugin "tailwindcss-animate";
 @custom-variant dark (&:is(.dark *));
@@ -65,34 +66,34 @@
 
 @layer base {
   :root {
-    --background: 0 0% 100%;
-    --foreground: 240 10% 3.9%;
+    --background: 80 13% 96%;
+    --foreground: 216 15% 11%;
     --card: 0 0% 100%;
-    --card-foreground: 240 10% 3.9%;
+    --card-foreground: 216 15% 11%;
     --popover: 0 0% 100%;
-    --popover-foreground: 240 10% 3.9%;
-    --primary: 240 5.9% 10%;
-    --primary-foreground: 0 0% 98%;
-    --secondary: 240 4.8% 95.9%;
-    --secondary-foreground: 240 5.9% 10%;
-    --muted: 240 4.8% 95.9%;
-    --muted-foreground: 240 3.8% 46.1%;
-    --accent: 240 4.8% 95.9%;
-    --accent-foreground: 240 5.9% 10%;
-    --destructive: 0 84.2% 60.2%;
+    --popover-foreground: 216 15% 11%;
+    --primary: 233 72% 29%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 230 25% 94%;
+    --secondary-foreground: 233 72% 24%;
+    --muted: 75 10% 93%;
+    --muted-foreground: 217 9% 44%;
+    --accent: 229 38% 94%;
+    --accent-foreground: 233 72% 29%;
+    --destructive: 358 82% 53%;
     --destructive-foreground: 0 0% 98%;
-    --border: 240 5.9% 90%;
-    --input: 240 5.9% 90%;
-    --ring: 240 5.9% 10%;
-    --radius: 0.625rem;
-    --sidebar-background: 0 0% 98%;
-    --sidebar-foreground: 240 5.3% 26.1%;
-    --sidebar-primary: 240 5.9% 10%;
-    --sidebar-primary-foreground: 0 0% 98%;
-    --sidebar-accent: 240 4.8% 95.9%;
-    --sidebar-accent-foreground: 240 5.9% 10%;
-    --sidebar-border: 220 13% 91%;
-    --sidebar-ring: 217.2 91.2% 59.8%;
+    --border: 220 12% 88%;
+    --input: 220 12% 88%;
+    --ring: 233 72% 29%;
+    --radius: 0.75rem;
+    --sidebar-background: 233 65% 20%;
+    --sidebar-foreground: 225 28% 91%;
+    --sidebar-primary: 0 0% 100%;
+    --sidebar-primary-foreground: 233 72% 29%;
+    --sidebar-accent: 232 50% 27%;
+    --sidebar-accent-foreground: 0 0% 100%;
+    --sidebar-border: 232 42% 29%;
+    --sidebar-ring: 358 82% 53%;
   }
 
   .dark {
@@ -132,5 +133,83 @@
   }
   body {
     @apply bg-background text-foreground;
+    min-width: 320px;
+    font-family: "Geist Variable", sans-serif;
+    font-feature-settings: "ss01" 1, "cv02" 1, "cv03" 1;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  ::selection {
+    background: hsl(233 72% 29% / 0.16);
+    color: hsl(var(--foreground));
+  }
+
+  :where(a, button, input, select, textarea, [tabindex]):focus-visible {
+    outline: 2px solid hsl(var(--ring));
+    outline-offset: 3px;
+  }
+
+  #fleet-navigation :where(a, button):focus-visible {
+    outline-color: white;
+  }
+}
+
+@layer utilities {
+  .lfz-panel {
+    @apply border border-black/[0.08] bg-white shadow-[0_1px_2px_rgba(16,24,40,0.025)];
+  }
+
+  .lfz-summary-strip {
+    @apply grid grid-cols-1 divide-y divide-gray-200 rounded-xl border border-gray-200 bg-white sm:grid-cols-3 sm:divide-x sm:divide-y-0;
+  }
+
+  .lfz-summary-strip > div {
+    @apply min-w-0 px-5 py-5;
+  }
+
+  .lfz-summary-strip dt {
+    @apply text-sm text-gray-500;
+  }
+
+  .lfz-summary-strip dd {
+    @apply mt-2 text-2xl font-semibold tracking-tight text-gray-900 tabular-nums;
+  }
+
+  .lfz-grid {
+    background-image:
+      linear-gradient(to right, rgba(21, 36, 127, 0.035) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(21, 36, 127, 0.035) 1px, transparent 1px);
+    background-size: 28px 28px;
+  }
+
+  .lfz-enter {
+    animation: lfz-enter 480ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+
+  .lfz-enter-delay-1 {
+    animation-delay: 80ms;
+  }
+
+  .lfz-enter-delay-2 {
+    animation-delay: 150ms;
+  }
+}
+
+@keyframes lfz-enter {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lfz-enter,
+  .lfz-enter-delay-1,
+  .lfz-enter-delay-2 {
+    animation: none;
   }
 }

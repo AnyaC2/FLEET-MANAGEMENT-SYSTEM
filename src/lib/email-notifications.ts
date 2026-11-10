@@ -7,14 +7,21 @@ export async function queueNotificationEmail(notificationId: Notification['id'])
   }
 
   try {
-    const { error } = await supabase.functions.invoke('send-notification-emails', {
+    const { data, error } = await supabase.functions.invoke('send-notification-emails', {
       body: { notificationId },
     });
 
     if (error) {
+      console.error('Notification email function returned an error payload.', {
+        notificationId,
+        data,
+      });
       throw error;
     }
   } catch (error) {
-    console.error('Failed to queue notification emails.', error);
+    console.error('Failed to queue notification emails.', {
+      notificationId,
+      error,
+    });
   }
 }

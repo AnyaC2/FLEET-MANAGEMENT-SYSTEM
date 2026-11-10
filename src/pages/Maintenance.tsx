@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import type { Maintenance, Vehicle } from '@/types';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/context/AuthContext';
@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { RegisterPagination } from '@/components/RegisterPagination';
 import {
   Dialog,
   DialogContent,
@@ -31,7 +32,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Plus, Wrench, AlertCircle, CheckCircle2, Clock, CircleDollarSign, Download } from 'lucide-react';
+import { Plus, Wrench, AlertCircle, CheckCircle2, Clock, CircleDollarSign, Download, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import {
@@ -57,8 +58,22 @@ const serviceTypes = [
 
 export default function Maintenance() {
   const { canManageRecords } = useAuth();
+  const [searchParams] = useSearchParams();
+  const requestedStatus = searchParams.get('status');
+  const requestedPeriod = searchParams.get('period');
   const [maintenance, setMaintenance] = useState<Maintenance[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<Maintenance['status'] | 'all'>(() =>
+    ['Scheduled', 'In Progress', 'Completed', 'Overdue'].includes(requestedStatus ?? '')
+      ? requestedStatus as Maintenance['status']
+      : 'all'
+  );
+  const [periodFilter, setPeriodFilter] = useState<'all' | 'month' | '30d' | '90d'>(
+    requestedPeriod === 'month' ? 'month' : 'all'
+  );
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -217,6 +232,28 @@ export default function Maintenance() {
     })
     .reduce((sum, m) => sum + m.cost, 0);
 
+  const filteredMaintenance = maintenance.filter((record) => {
+    const vehicle = vehicles.find((item) => item.id === record.vehicleId);
+    const query = searchQuery.trim().toLowerCase();
+    const matchesSearch = !query || [record.serviceType, record.serviceProvider, vehicle?.plateNumber]
+      .some((value) => value?.toLowerCase().includes(query));
+    const matchesStatus = statusFilter === 'all' || record.status === statusFilter;
+    const recordDate = new Date(record.scheduledDate);
+    const now = new Date();
+    const daysAgo = (now.getTime() - recordDate.getTime()) / 86_400_000;
+    const matchesPeriod = periodFilter === 'all'
+      || (periodFilter === 'month' && recordDate.getMonth() === now.getMonth() && recordDate.getFullYear() === now.getFullYear())
+      || (periodFilter === '30d' && daysAgo >= 0 && daysAgo <= 30)
+      || (periodFilter === '90d' && daysAgo >= 0 && daysAgo <= 90);
+    return matchesSearch && matchesStatus && matchesPeriod;
+  });
+  const maintenancePageCount = Math.max(1, Math.ceil(filteredMaintenance.length / pageSize));
+  const visibleMaintenancePage = Math.min(currentPage, maintenancePageCount);
+  const paginatedMaintenance = filteredMaintenance.slice(
+    (visibleMaintenancePage - 1) * pageSize,
+    visibleMaintenancePage * pageSize
+  );
+
   const handleExportMaintenanceReport = () => {
     const range = resolveDateRange({
       preset: reportPreset,
@@ -253,14 +290,14 @@ export default function Maintenance() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {/* Page header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="lfz-enter flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Maintenance</h1>
-          <p className="text-gray-500">Schedule and track vehicle maintenance</p>
+          <h1 className="text-3xl font-semibold tracking-[-0.035em] text-gray-900 sm:text-[2.25rem]">Maintenance</h1>
+          <p className="mt-1.5 text-sm text-gray-500">Plan servicing, monitor workshop activity, and resolve overdue work.</p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-2.5">
           <Dialog open={isReportModalOpen} onOpenChange={setIsReportModalOpen}>
             <Button variant="outline" onClick={() => setIsReportModalOpen(true)}>
               <Download className="w-4 h-4 mr-2" />
@@ -449,8 +486,8 @@ export default function Maintenance() {
                 <p className="text-sm text-gray-500">Scheduled</p>
                 <p className="text-2xl font-bold">{scheduledCount}</p>
               </div>
-              <div className="w-10 h-10 rounded-lg bg-slate-100 flex items-center justify-center">
-                <Clock className="w-5 h-5 text-slate-600" />
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#eef0f8]">
+                <Clock className="h-5 w-5 text-[#15247f]" />
               </div>
             </div>
           </CardContent>
@@ -462,7 +499,7 @@ export default function Maintenance() {
                 <p className="text-sm text-gray-500">In Progress</p>
                 <p className="text-2xl font-bold">{inProgressCount}</p>
               </div>
-              <div className="w-10 h-10 rounded-lg bg-amber-100 flex items-center justify-center">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-100">
                 <Wrench className="w-5 h-5 text-amber-500" />
               </div>
             </div>
@@ -475,8 +512,8 @@ export default function Maintenance() {
                 <p className="text-sm text-gray-500">Completed</p>
                 <p className="text-2xl font-bold">{completedCount}</p>
               </div>
-              <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center">
-                <CheckCircle2 className="w-5 h-5 text-green-500" />
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#eaf7f0]">
+                <CheckCircle2 className="h-5 w-5 text-[#21895a]" />
               </div>
             </div>
           </CardContent>
@@ -490,7 +527,7 @@ export default function Maintenance() {
                   {overdueCount}
                 </p>
               </div>
-              <div className="w-10 h-10 rounded-lg bg-red-100 flex items-center justify-center">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-100">
                 <AlertCircle className="w-5 h-5 text-red-500" />
               </div>
             </div>
@@ -503,8 +540,8 @@ export default function Maintenance() {
                 <p className="text-sm text-gray-500">Monthly Cost</p>
                 <p className="text-2xl font-bold">{formatCurrency(monthlyCost)}</p>
               </div>
-              <div className="w-10 h-10 rounded-lg bg-emerald-100 flex items-center justify-center">
-                <CircleDollarSign className="w-5 h-5 text-emerald-600" />
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#eaf7f0]">
+                <CircleDollarSign className="h-5 w-5 text-[#21895a]" />
               </div>
             </div>
           </CardContent>
@@ -587,9 +624,40 @@ export default function Maintenance() {
       </div>
 
       {/* Maintenance table */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">All Maintenance Records</CardTitle>
+      <Card className="gap-0 overflow-hidden py-0">
+        <CardHeader className="border-b border-gray-100 py-5">
+          <CardTitle className="text-lg">Maintenance register</CardTitle>
+          <div className="mt-3 flex flex-col gap-3 sm:flex-row">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+              <Input
+                aria-label="Search maintenance records"
+                className="pl-10"
+                placeholder="Search plate, service, or provider..."
+                value={searchQuery}
+                onChange={(event) => { setSearchQuery(event.target.value); setCurrentPage(1); }}
+              />
+            </div>
+            <Select value={statusFilter} onValueChange={(value) => { setStatusFilter(value as typeof statusFilter); setCurrentPage(1); }}>
+              <SelectTrigger className="w-full sm:w-40" aria-label="Filter maintenance by status"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All statuses</SelectItem>
+                <SelectItem value="Scheduled">Scheduled</SelectItem>
+                <SelectItem value="In Progress">In progress</SelectItem>
+                <SelectItem value="Completed">Completed</SelectItem>
+                <SelectItem value="Overdue">Overdue</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={periodFilter} onValueChange={(value) => { setPeriodFilter(value as typeof periodFilter); setCurrentPage(1); }}>
+              <SelectTrigger className="w-full sm:w-40" aria-label="Filter maintenance by period"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All dates</SelectItem>
+                <SelectItem value="month">This month</SelectItem>
+                <SelectItem value="30d">Last 30 days</SelectItem>
+                <SelectItem value="90d">Last 90 days</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </CardHeader>
         <CardContent className="p-0">
           <Table>
@@ -605,14 +673,14 @@ export default function Maintenance() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {maintenance.length === 0 ? (
+              {filteredMaintenance.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={7} className="text-center py-8 text-gray-500">
-                    No maintenance records
+                    {maintenance.length ? 'No maintenance records match these filters' : 'No maintenance records'}
                   </TableCell>
                 </TableRow>
               ) : (
-                maintenance.map((maint) => {
+                paginatedMaintenance.map((maint) => {
                   const vehicle = vehicles.find((v) => v.id === maint.vehicleId);
                   return (
                     <TableRow key={maint.id}>
@@ -659,6 +727,14 @@ export default function Maintenance() {
             </TableBody>
           </Table>
         </CardContent>
+        <RegisterPagination
+          currentPage={visibleMaintenancePage}
+          itemLabel="records"
+          onPageChange={setCurrentPage}
+          onPageSizeChange={(size) => { setPageSize(size); setCurrentPage(1); }}
+          pageSize={pageSize}
+          totalItems={filteredMaintenance.length}
+        />
       </Card>
     </div>
   );

@@ -5,18 +5,6 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-access-token, x-client-info, apikey, content-type',
 };
 
-function decodeJwtPayload(token: string) {
-  const [, payload] = token.split('.');
-  if (!payload) {
-    throw new Error('Invalid access token');
-  }
-
-  const normalized = payload.replace(/-/g, '+').replace(/_/g, '/');
-  const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=');
-  const decoded = atob(padded);
-  return JSON.parse(decoded) as { sub?: string; subject?: string };
-}
-
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -24,7 +12,6 @@ Deno.serve(async (req) => {
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
-    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY');
     const supabaseServiceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
     const authHeader =
       req.headers.get('x-access-token') ??
@@ -32,7 +19,7 @@ Deno.serve(async (req) => {
       req.headers.get('Authorization') ??
       req.headers.get('x-forwarded-authorization');
 
-    if (!supabaseUrl || !supabaseAnonKey || !supabaseServiceRoleKey) {
+    if (!supabaseUrl || !supabaseServiceRoleKey) {
       throw new Error('Supabase function secrets are not configured');
     }
 
@@ -56,16 +43,20 @@ Deno.serve(async (req) => {
       });
     }
 
-    const jwtPayload = decodeJwtPayload(accessToken);
-    const requestingUserId = jwtPayload.sub ?? jwtPayload.subject;
+    const {
+      data: { user: requestingUser },
+      error: authError,
+    } = await adminClient.auth.getUser(accessToken);
 
-    if (!requestingUserId) {
-      console.error('create-user auth failed: missing user identifier', jwtPayload);
+    if (authError || !requestingUser) {
+      console.error('create-user auth failed', authError);
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+
+    const requestingUserId = requestingUser.id;
 
     const { data: requesterProfile, error: requesterProfileError } = await adminClient
       .from('profiles')

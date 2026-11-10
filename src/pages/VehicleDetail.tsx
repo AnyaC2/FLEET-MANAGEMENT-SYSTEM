@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useEffectEvent } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import type { Vehicle, Driver, FuelLog, Maintenance, Incident, OdometerLog, Trip } from '@/types';
 import { Button } from '@/components/ui/button';
@@ -76,13 +76,7 @@ export default function VehicleDetail() {
   const [odometerForm, setOdometerForm] = useState({ reading: '', notes: '' });
   const [serviceDueForm, setServiceDueForm] = useState('');
 
-  useEffect(() => {
-    if (id) {
-      void loadVehicleData();
-    }
-  }, [id]);
-
-  const loadVehicleData = async () => {
+  async function loadVehicleData() {
     const vehicleData = await getVehicleById(id!);
     if (!vehicleData) {
       navigate('/vehicles');
@@ -120,7 +114,15 @@ export default function VehicleDetail() {
     // Get available drivers
     const allDrivers = await listActiveDrivers();
     setDrivers(allDrivers);
-  };
+  }
+
+  const loadInitialVehicleData = useEffectEvent(() => loadVehicleData());
+
+  useEffect(() => {
+    if (id) {
+      void loadInitialVehicleData();
+    }
+  }, [id]);
 
   const handleChangeDriver = async () => {
     if (!selectedDriverId) {
@@ -133,7 +135,7 @@ export default function VehicleDetail() {
       toast.success('Driver assigned successfully');
       setIsChangeDriverModalOpen(false);
       await loadVehicleData();
-    } catch (error) {
+    } catch {
       toast.error('Failed to assign driver');
     }
   };
@@ -183,7 +185,7 @@ export default function VehicleDetail() {
       toast.success('Service due mileage updated successfully');
       setIsServiceDueModalOpen(false);
       await loadVehicleData();
-    } catch (error) {
+    } catch {
       toast.error('Failed to update service due mileage');
     }
   };
@@ -228,7 +230,7 @@ export default function VehicleDetail() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {/* Back button */}
       <Link to="/vehicles">
         <Button variant="ghost" className="pl-0">
@@ -238,14 +240,14 @@ export default function VehicleDetail() {
       </Link>
 
       {/* Vehicle header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="lfz-enter flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">
+          <h1 className="text-3xl font-semibold tracking-[-0.035em] text-gray-900 sm:text-[2.25rem]">
             {vehicle.brand} {vehicle.model}
           </h1>
-          <p className="text-gray-500">{vehicle.plateNumber}</p>
+          <p className="mt-1.5 text-sm font-medium text-[#15247f]">{vehicle.plateNumber}</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {canManageRecords && (
             <>
               <Button variant="outline" onClick={() => {
@@ -277,8 +279,8 @@ export default function VehicleDetail() {
                 <p className="text-sm text-gray-500">Total Fuel Cost</p>
                 <p className="text-xl font-bold">{formatCurrency(totalFuelCost)}</p>
               </div>
-              <div className="w-10 h-10 rounded-lg bg-emerald-100 flex items-center justify-center">
-                <Fuel className="w-5 h-5 text-emerald-600" />
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#eaf7f0]">
+                <Fuel className="h-5 w-5 text-[#21895a]" />
               </div>
             </div>
           </CardContent>
@@ -290,7 +292,7 @@ export default function VehicleDetail() {
                 <p className="text-sm text-gray-500">Maintenance Cost</p>
                 <p className="text-xl font-bold">{formatCurrency(totalMaintenanceCost)}</p>
               </div>
-              <div className="w-10 h-10 rounded-lg bg-amber-100 flex items-center justify-center">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-100">
                 <Wrench className="w-5 h-5 text-amber-500" />
               </div>
             </div>
@@ -303,7 +305,7 @@ export default function VehicleDetail() {
                 <p className="text-sm text-gray-500">Incident Cost</p>
                 <p className="text-xl font-bold">{formatCurrency(totalIncidentCost)}</p>
               </div>
-              <div className="w-10 h-10 rounded-lg bg-red-100 flex items-center justify-center">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-100">
                 <AlertTriangle className="w-5 h-5 text-red-500" />
               </div>
             </div>
@@ -316,8 +318,8 @@ export default function VehicleDetail() {
                 <p className="text-sm text-gray-500">Total Distance</p>
                 <p className="text-xl font-bold">{totalDistance.toLocaleString()} km</p>
               </div>
-              <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
-                <Route className="w-5 h-5 text-blue-500" />
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#eef0f8]">
+                <Route className="h-5 w-5 text-[#15247f]" />
               </div>
             </div>
           </CardContent>

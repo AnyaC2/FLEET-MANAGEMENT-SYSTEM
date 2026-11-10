@@ -8,6 +8,7 @@ import type {
   Trip,
   Document,
   Notification,
+  ImportBatch,
   User,
 } from '@/types';
 
@@ -22,12 +23,13 @@ const DB_KEYS = {
   trips: 'lfz_fleet_trips',
   documents: 'lfz_fleet_documents',
   notifications: 'lfz_fleet_notifications',
+  importBatches: 'lfz_fleet_import_batches',
   users: 'lfz_fleet_users',
   currentUser: 'lfz_fleet_current_user',
 };
 
 // Generic CRUD operations
-class Database<T> {
+class Database<T extends { id: string }> {
   private key: string;
 
   constructor(key: string) {
@@ -41,7 +43,7 @@ class Database<T> {
 
   getById(id: string): T | undefined {
     const items = this.getAll();
-    return items.find((item: any) => item.id === id);
+    return items.find((item) => item.id === id);
   }
 
   create(item: T): T {
@@ -53,7 +55,7 @@ class Database<T> {
 
   update(id: string, updates: Partial<T>): T | undefined {
     const items = this.getAll();
-    const index = items.findIndex((item: any) => item.id === id);
+    const index = items.findIndex((item) => item.id === id);
     if (index === -1) return undefined;
     items[index] = { ...items[index], ...updates };
     localStorage.setItem(this.key, JSON.stringify(items));
@@ -62,7 +64,7 @@ class Database<T> {
 
   delete(id: string): boolean {
     const items = this.getAll();
-    const filtered = items.filter((item: any) => item.id !== id);
+    const filtered = items.filter((item) => item.id !== id);
     if (filtered.length === items.length) return false;
     localStorage.setItem(this.key, JSON.stringify(filtered));
     return true;
@@ -84,6 +86,7 @@ export const db = {
   trips: new Database<Trip>(DB_KEYS.trips),
   documents: new Database<Document>(DB_KEYS.documents),
   notifications: new Database<Notification>(DB_KEYS.notifications),
+  importBatches: new Database<ImportBatch>(DB_KEYS.importBatches),
   users: new Database<User>(DB_KEYS.users),
 };
 
@@ -102,7 +105,8 @@ export const auth = {
     }
   },
 
-  login(email: string, _password: string): User | null {
+  login(email: string, password: string): User | null {
+    void password;
     const users = db.users.getAll();
     const user = users.find((u) => u.email === email);
     if (user) {

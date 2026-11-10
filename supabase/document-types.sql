@@ -13,10 +13,3 @@ on public.document_types
 for select
 to authenticated
 using (true);
-
-drop policy if exists "Editors and system admins can insert document types" on public.document_types;
-create policy "Editors and system admins can insert document types"
-on public.document_types
-for insert
-to authenticated
-with check (public.can_manage_records());

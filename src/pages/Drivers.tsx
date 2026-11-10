@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import type { Driver, Vehicle } from '@/types';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/context/AuthContext';
@@ -7,6 +7,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
+import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
+import { RegisterPagination } from '@/components/RegisterPagination';
 import {
   Dialog,
   DialogContent,
@@ -39,10 +41,16 @@ import { exportWorkbook } from '@/lib/excel-export';
 
 export default function Drivers() {
   const { canManageRecords } = useAuth();
+  const [searchParams] = useSearchParams();
+  const requestedStatus = searchParams.get('status');
   const [drivers, setDrivers] = useState<Driver[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
-  const [statusFilter, setStatusFilter] = useState<'all' | 'Active' | 'Inactive'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'Active' | 'Inactive'>(() =>
+    requestedStatus === 'Active' || requestedStatus === 'Inactive' ? requestedStatus : 'all'
+  );
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -77,6 +85,12 @@ export default function Drivers() {
     const matchesStatus = statusFilter === 'all' || driver.status === statusFilter;
     return matchesSearch && matchesStatus;
   });
+  const driverPageCount = Math.max(1, Math.ceil(filteredDrivers.length / pageSize));
+  const visibleDriverPage = Math.min(currentPage, driverPageCount);
+  const paginatedDrivers = filteredDrivers.slice(
+    (visibleDriverPage - 1) * pageSize,
+    visibleDriverPage * pageSize
+  );
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -115,7 +129,7 @@ export default function Drivers() {
       setIsAddModalOpen(false);
       resetForm();
       await loadDrivers();
-    } catch (error) {
+    } catch {
       toast.error('Failed to add driver');
     } finally {
       setIsSubmitting(false);
@@ -141,7 +155,7 @@ export default function Drivers() {
       await updateDriverStatus(driverId, status);
       toast.success(`Driver marked ${status.toLowerCase()}`);
       await loadDrivers();
-    } catch (error) {
+    } catch {
       toast.error('Failed to update driver status');
     }
   };
@@ -177,14 +191,14 @@ export default function Drivers() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {/* Page header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="lfz-enter flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Drivers</h1>
-          <p className="text-gray-500">Manage your fleet drivers</p>
+          <h1 className="text-3xl font-semibold tracking-[-0.035em] text-gray-900 sm:text-[2.25rem]">Drivers</h1>
+          <p className="mt-1.5 text-sm text-gray-500">Manage drivers, licences, and vehicle assignments.</p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-2.5">
           <Button variant="outline" onClick={handleExportDriversReport}>
             <Download className="w-4 h-4 mr-2" />
             Export Excel
@@ -206,8 +220,8 @@ export default function Drivers() {
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSubmit}>
-              <div className="grid grid-cols-2 gap-4 py-4">
-                <div className="col-span-2 space-y-2">
+              <div className="grid grid-cols-1 gap-4 py-4 sm:grid-cols-2">
+                <div className="space-y-2 sm:col-span-2">
                   <Label htmlFor="fullName">Full Name *</Label>
                   <Input
                     id="fullName"
@@ -225,17 +239,6 @@ export default function Drivers() {
                     value={formData.phoneNumber}
                     onChange={handleInputChange}
                     placeholder="e.g., +234 801 234 5678"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email</Label>
-                  <Input
-                    id="email"
-                    name="email"
-                    type="email"
-                    value={formData.email}
-                    onChange={handleInputChange}
-                    placeholder="e.g., john@lfzdc.com"
                   />
                 </div>
                 <div className="space-y-2">
@@ -259,39 +262,6 @@ export default function Drivers() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="dateOfBirth">Date of Birth</Label>
-                  <Input
-                    id="dateOfBirth"
-                    name="dateOfBirth"
-                    type="date"
-                    value={formData.dateOfBirth}
-                    onChange={handleInputChange}
-                    placeholder="MM/DD/YYYY"
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="hireDate">Hire Date</Label>
-                  <Input
-                    id="hireDate"
-                    name="hireDate"
-                    type="date"
-                    value={formData.hireDate}
-                    onChange={handleInputChange}
-                    placeholder="MM/DD/YYYY"
-                  />
-                </div>
-                <div className="col-span-2 space-y-2">
-                  <Label htmlFor="address">Home Address</Label>
-                  <textarea
-                    id="address"
-                    name="address"
-                    value={formData.address}
-                    onChange={handleInputChange}
-                    placeholder="Enter full residential address"
-                    className="w-full min-h-[80px] px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                  />
-                </div>
-                <div className="space-y-2">
                   <Label htmlFor="status">Status</Label>
                   <Select
                     value={formData.status}
@@ -308,6 +278,36 @@ export default function Drivers() {
                     </SelectContent>
                   </Select>
                 </div>
+                <Accordion type="single" collapsible className="rounded-xl border border-gray-200 px-4 sm:col-span-2">
+                  <AccordionItem value="additional" className="border-0">
+                    <AccordionTrigger className="hover:no-underline">
+                      <span>
+                        Additional details
+                        <span className="mt-1 block text-xs font-normal text-gray-500">Email, personal dates and residential address</span>
+                      </span>
+                    </AccordionTrigger>
+                    <AccordionContent>
+                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <div className="space-y-2 sm:col-span-2">
+                          <Label htmlFor="email">Email</Label>
+                          <Input id="email" name="email" type="email" value={formData.email} onChange={handleInputChange} placeholder="e.g., john@lfzdc.com" />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="dateOfBirth">Date of Birth</Label>
+                          <Input id="dateOfBirth" name="dateOfBirth" type="date" value={formData.dateOfBirth} onChange={handleInputChange} />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="hireDate">Hire Date</Label>
+                          <Input id="hireDate" name="hireDate" type="date" value={formData.hireDate} onChange={handleInputChange} />
+                        </div>
+                        <div className="space-y-2 sm:col-span-2">
+                          <Label htmlFor="address">Home Address</Label>
+                          <textarea id="address" name="address" value={formData.address} onChange={handleInputChange} placeholder="Enter full residential address" className="w-full min-h-[80px] px-3 py-2 border rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-primary" />
+                        </div>
+                      </div>
+                    </AccordionContent>
+                  </AccordionItem>
+                </Accordion>
               </div>
               <DialogFooter>
                 <Button type="button" variant="outline" onClick={() => setIsAddModalOpen(false)}>
@@ -324,35 +324,40 @@ export default function Drivers() {
       </div>
 
       {/* Filters */}
-      <Card>
-        <CardContent className="p-4">
+      <Card className="gap-0 overflow-hidden py-0">
+        <CardContent className="border-b border-gray-200 p-4">
           <div className="flex flex-col sm:flex-row gap-4">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
               <Input
                 placeholder="Search by name, license, or phone..."
+                aria-label="Search drivers"
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e) => { setSearchQuery(e.target.value); setCurrentPage(1); }}
                 className="pl-10"
               />
             </div>
-            <Select value={statusFilter} onValueChange={(v) => setStatusFilter(v as typeof statusFilter)}>
-              <SelectTrigger className="w-40">
+            <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v as typeof statusFilter); setCurrentPage(1); }}>
+              <SelectTrigger aria-label="Filter drivers by status" className="w-40">
                 <User className="w-4 h-4 mr-2" />
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="all">All Status</SelectItem>
+                <SelectItem value="all">All statuses</SelectItem>
                 <SelectItem value="Active">Active</SelectItem>
                 <SelectItem value="Inactive">Inactive</SelectItem>
               </SelectContent>
             </Select>
           </div>
         </CardContent>
-      </Card>
-
-      {/* Drivers table */}
-      <Card>
+        <div className="flex flex-wrap items-center justify-between gap-2 px-5 py-3 text-sm text-gray-500" role="status">
+          <span>{filteredDrivers.length} of {drivers.length} drivers</span>
+          {(searchQuery || statusFilter !== 'all') && (
+            <Button variant="ghost" size="sm" onClick={() => { setSearchQuery(''); setStatusFilter('all'); setCurrentPage(1); }}>
+              Clear filters
+            </Button>
+          )}
+        </div>
         <CardContent className="p-0">
           <Table>
             <TableHeader>
@@ -369,15 +374,16 @@ export default function Drivers() {
               {filteredDrivers.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={6} className="text-center py-8 text-gray-500">
-                    No drivers found
+                    <p className="font-medium text-gray-900">{drivers.length ? 'No matching drivers' : 'No drivers registered yet'}</p>
+                    <p className="mt-1 text-sm">{drivers.length ? 'Try a different name or clear the filters.' : 'Add or import a driver to start recording assignments.'}</p>
                   </TableCell>
                 </TableRow>
               ) : (
-                filteredDrivers.map((driver) => {
+                paginatedDrivers.map((driver) => {
                   const assignedVehicle = getAssignedVehicle(driver.id);
-                  const isLicenseExpiring =
-                    new Date(driver.licenseExpiry).getTime() - new Date().getTime() <
-                    90 * 24 * 60 * 60 * 1000; // 90 days
+                  const daysUntilExpiry = (new Date(`${driver.licenseExpiry.slice(0, 10)}T23:59:59`).getTime() - Date.now()) / 86_400_000;
+                  const isLicenseExpired = daysUntilExpiry < 0;
+                  const isLicenseExpiring = !isLicenseExpired && daysUntilExpiry < 90;
 
                   return (
                     <TableRow key={driver.id}>
@@ -387,7 +393,7 @@ export default function Drivers() {
                             <User className="w-5 h-5 text-primary" />
                           </div>
                           <div>
-                            <p className="font-medium">{driver.fullName}</p>
+                            <Link to={`/drivers/${driver.id}`} className="font-medium text-primary hover:underline">{driver.fullName}</Link>
                             <p className="text-sm text-gray-500">{driver.phoneNumber}</p>
                           </div>
                         </div>
@@ -395,7 +401,7 @@ export default function Drivers() {
                       <TableCell>{driver.licenseNumber}</TableCell>
                       <TableCell>
                         <Badge variant={driver.status === 'Active' ? 'default' : 'secondary'}
-                          className={driver.status === 'Active' ? 'bg-green-500' : ''}
+                          className={driver.status === 'Active' ? 'border-green-200 bg-green-50 text-green-800' : ''}
                         >
                           {driver.status}
                         </Badge>
@@ -412,12 +418,12 @@ export default function Drivers() {
                         )}
                       </TableCell>
                       <TableCell>
-                        <span className={isLicenseExpiring ? 'text-amber-600 font-medium' : ''}>
+                        <span className={isLicenseExpired ? 'text-red-700 font-medium' : isLicenseExpiring ? 'text-amber-700 font-medium' : ''}>
                           {format(new Date(driver.licenseExpiry), 'MMM d, yyyy')}
                         </span>
-                        {isLicenseExpiring && (
-                          <Badge variant="secondary" className="ml-2 text-xs bg-amber-500 text-white">
-                            Expiring Soon
+                        {(isLicenseExpired || isLicenseExpiring) && (
+                          <Badge variant="outline" className={`ml-2 text-xs ${isLicenseExpired ? 'border-red-200 bg-red-50 text-red-700' : 'border-amber-200 bg-amber-50 text-amber-800'}`}>
+                            {isLicenseExpired ? 'Expired' : 'Expiring soon'}
                           </Badge>
                         )}
                       </TableCell>
@@ -428,7 +434,7 @@ export default function Drivers() {
                               value={driver.status}
                               onValueChange={(value) => void handleStatusChange(driver.id, value as Driver['status'])}
                             >
-                              <SelectTrigger className="w-28">
+                              <SelectTrigger aria-label={`Change status for ${driver.fullName}`} className="w-28">
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
@@ -437,11 +443,11 @@ export default function Drivers() {
                               </SelectContent>
                             </Select>
                           )}
-                          <Link to={`/drivers/${driver.id}`}>
-                            <Button variant="ghost" size="icon">
+                            <Button asChild variant="ghost" size="icon">
+                              <Link to={`/drivers/${driver.id}`} aria-label={`View ${driver.fullName}`}>
                               <Eye className="w-4 h-4" />
+                              </Link>
                             </Button>
-                          </Link>
                         </div>
                       </TableCell>
                     </TableRow>
@@ -451,6 +457,14 @@ export default function Drivers() {
             </TableBody>
           </Table>
         </CardContent>
+        <RegisterPagination
+          currentPage={visibleDriverPage}
+          itemLabel="drivers"
+          onPageChange={setCurrentPage}
+          onPageSizeChange={(size) => { setPageSize(size); setCurrentPage(1); }}
+          pageSize={pageSize}
+          totalItems={filteredDrivers.length}
+        />
       </Card>
     </div>
   );

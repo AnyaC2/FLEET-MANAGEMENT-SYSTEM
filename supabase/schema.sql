@@ -151,6 +151,21 @@ create table if not exists public.notification_email_deliveries (
   primary key (notification_id, profile_id)
 );
 
+create table if not exists public.import_batches (
+  id text primary key,
+  file_name text not null,
+  imported_at timestamptz not null default timezone('utc', now()),
+  imported_by_user_id uuid references public.profiles(id) on delete set null,
+  imported_by_name text,
+  total_rows integer not null default 0,
+  valid_rows integer not null default 0,
+  created_counts jsonb not null default '{}'::jsonb,
+  skipped_counts jsonb not null default '{}'::jsonb,
+  issue_count integer not null default 0,
+  issues jsonb not null default '[]'::jsonb,
+  sheet_summaries jsonb not null default '[]'::jsonb
+);
+
 create or replace function public.set_updated_at()
 returns trigger
 language plpgsql
@@ -208,6 +223,7 @@ alter table public.trips enable row level security;
 alter table public.documents enable row level security;
 alter table public.notifications enable row level security;
 alter table public.notification_email_deliveries enable row level security;
+alter table public.import_batches enable row level security;
 
 drop policy if exists "Users can view own profile" on public.profiles;
 create policy "Users can view own profile"
@@ -286,3 +302,17 @@ on public.notifications
 for select
 to authenticated
 using (true);
+
+drop policy if exists "Authenticated users can read import batches" on public.import_batches;
+create policy "Authenticated users can read import batches"
+on public.import_batches
+for select
+to authenticated
+using (true);
+
+drop policy if exists "Authenticated users can insert import batches" on public.import_batches;
+create policy "Authenticated users can insert import batches"
+on public.import_batches
+for insert
+to authenticated
+with check (true);

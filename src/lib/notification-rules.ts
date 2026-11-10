@@ -1,13 +1,13 @@
 import type { Document, Notification } from '@/types';
 import { listDocuments } from '@/lib/documents-data';
 import { queueNotificationEmail } from '@/lib/email-notifications';
-import { loadCurrentUserSettings } from '@/lib/settings-data';
+import { loadUserSettings } from '@/lib/settings-data';
 import {
-  deleteNotification,
   listDrivers,
   listMaintenance,
   listNotifications,
   listVehicles,
+  updateNotification,
   upsertNotification,
 } from '@/lib/fleet-data';
 
@@ -42,9 +42,20 @@ function isRuleNotification(id: string) {
   return RULE_PREFIXES.some((prefix) => id.startsWith(prefix));
 }
 
-export async function syncAutomaticNotifications(): Promise<void> {
+function notificationChanged(existing: Notification, desired: Notification) {
+  return (
+    existing.title !== desired.title ||
+    existing.message !== desired.message ||
+    existing.type !== desired.type ||
+    existing.isRead !== desired.isRead ||
+    existing.vehicleId !== desired.vehicleId ||
+    existing.driverId !== desired.driverId
+  );
+}
+
+export async function syncAutomaticNotifications(userId: string): Promise<void> {
   const [settings, notifications, drivers, vehicles, maintenanceRecords, documents] = await Promise.all([
-    loadCurrentUserSettings(),
+    loadUserSettings(userId),
     listNotifications(),
     listDrivers(),
     listVehicles(),
@@ -183,8 +194,11 @@ export async function syncAutomaticNotifications(): Promise<void> {
   }
 
   for (const notification of desiredRuleNotifications.values()) {
-    await upsertNotification(notification);
-    if (!existingById.has(notification.id)) {
+    const existing = existingById.get(notification.id);
+    if (!existing || notificationChanged(existing, notification)) {
+      await upsertNotification(notification);
+    }
+    if (!existing) {
       await queueNotificationEmail(notification.id);
     }
   }
@@ -194,6 +208,8 @@ export async function syncAutomaticNotifications(): Promise<void> {
   );
 
   for (const notification of staleRuleNotifications) {
-    await deleteNotification(notification.id);
+    if (!notification.isRead) {
+      await updateNotification(notification.id, { isRead: true });
+    }
   }
 }

@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { useState, useEffect, useEffectEvent } from 'react';
+import { Link, useSearchParams } from 'react-router-dom';
 import type { FuelLog, Vehicle } from '@/types';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/context/AuthContext';
@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { RegisterPagination } from '@/components/RegisterPagination';
 import {
   Dialog,
   DialogContent,
@@ -31,7 +32,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Plus, FuelIcon, TrendingUp, Droplets, Download } from 'lucide-react';
+import { Plus, Download, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import {
@@ -49,12 +50,19 @@ import { dateFallsInRange, resolveDateRange, type PeriodPreset } from '@/lib/rep
 
 export default function Fuel() {
   const { canManageRecords } = useAuth();
+  const [searchParams] = useSearchParams();
   const [fuelLogs, setFuelLogs] = useState<FuelLog[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [periodFilter, setPeriodFilter] = useState<'all' | 'month' | '30d' | '90d'>(() =>
+    searchParams.get('period') === 'month' ? 'month' : 'all'
+  );
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [chartData, setChartData] = useState<any[]>([]);
+  const [chartData, setChartData] = useState<{ month: string; liters: number; cost: number }[]>([]);
   const [reportPreset, setReportPreset] = useState<PeriodPreset>('30d');
   const [reportVehicleId, setReportVehicleId] = useState('all');
   const [reportType, setReportType] = useState<'transactions' | 'vehicle_summary' | 'spend_summary'>('transactions');
@@ -71,8 +79,9 @@ export default function Fuel() {
     station: '',
   });
 
+  const loadInitialData = useEffectEvent(() => loadData());
   useEffect(() => {
-    void loadData();
+    void loadInitialData();
   }, []);
 
   const getLastSixMonths = () => {
@@ -112,6 +121,23 @@ export default function Fuel() {
     });
     setChartData(data);
   };
+
+  const filteredFuelLogs = fuelLogs.filter((log) => {
+    const vehicle = vehicles.find((item) => item.id === log.vehicleId);
+    const query = searchQuery.trim().toLowerCase();
+    const matchesSearch = !query || vehicle?.plateNumber.toLowerCase().includes(query) || log.station?.toLowerCase().includes(query);
+    const logDate = new Date(log.date);
+    const now = new Date();
+    const daysAgo = (now.getTime() - logDate.getTime()) / 86_400_000;
+    const matchesPeriod = periodFilter === 'all'
+      || (periodFilter === 'month' && logDate.getMonth() === now.getMonth() && logDate.getFullYear() === now.getFullYear())
+      || (periodFilter === '30d' && daysAgo >= 0 && daysAgo <= 30)
+      || (periodFilter === '90d' && daysAgo >= 0 && daysAgo <= 90);
+    return matchesSearch && matchesPeriod;
+  });
+  const fuelPageCount = Math.max(1, Math.ceil(filteredFuelLogs.length / pageSize));
+  const visibleFuelPage = Math.min(currentPage, fuelPageCount);
+  const paginatedFuelLogs = filteredFuelLogs.slice((visibleFuelPage - 1) * pageSize, visibleFuelPage * pageSize);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -291,14 +317,14 @@ export default function Fuel() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {/* Page header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="lfz-enter flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Fuel Management</h1>
-          <p className="text-gray-500">Track fuel purchases and consumption</p>
+          <h1 className="text-3xl font-semibold tracking-[-0.035em] text-gray-900 sm:text-[2.25rem]">Fuel management</h1>
+          <p className="mt-1.5 text-sm text-gray-500">Fuel purchases, quantities and cost per vehicle.</p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-2.5">
           <Dialog open={isReportModalOpen} onOpenChange={setIsReportModalOpen}>
             <Button variant="outline" onClick={() => setIsReportModalOpen(true)}>
               <Download className="w-4 h-4 mr-2" />
@@ -489,64 +515,32 @@ export default function Fuel() {
       </div>
 
       {/* Stats cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-500">Total Fuel Cost</p>
-                <p className="text-2xl font-bold">{formatCurrency(totalCost)}</p>
-              </div>
-              <div className="w-12 h-12 bg-green-500/10 rounded-lg flex items-center justify-center">
-                <FuelIcon className="w-6 h-6 text-green-500" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-500">Total Liters</p>
-                <p className="text-2xl font-bold">{totalLiters.toLocaleString()} L</p>
-              </div>
-              <div className="w-12 h-12 bg-blue-500/10 rounded-lg flex items-center justify-center">
-                <Droplets className="w-6 h-6 text-blue-500" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm font-medium text-gray-500">Avg. Cost/Liter</p>
-                <p className="text-2xl font-bold">{formatCurrency(avgCostPerLiter)}</p>
-              </div>
-              <div className="w-12 h-12 bg-amber-500/10 rounded-lg flex items-center justify-center">
-                <TrendingUp className="w-6 h-6 text-amber-500" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+      <dl className="lfz-summary-strip" aria-label="Fuel totals, all recorded purchases">
+        <div><dt>Total spend <span className="text-xs">/ all time</span></dt><dd>{formatCurrency(totalCost)}</dd></div>
+        <div><dt>Fuel purchased</dt><dd>{totalLiters.toLocaleString()} <span className="text-base font-normal text-gray-500">litres</span></dd></div>
+        <div><dt>Average price per litre</dt><dd>{formatCurrency(avgCostPerLiter)}</dd></div>
+      </dl>
 
       {/* Chart */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-lg">Fuel Consumption Trend</CardTitle>
+          <CardTitle className="text-lg">Fuel purchases by month</CardTitle>
+          <div className="flex flex-wrap gap-4 text-xs text-gray-600">
+            <span className="flex items-center gap-2"><span className="h-2 w-2 rounded-sm bg-[#15247f]" />Litres · left axis</span>
+            <span className="flex items-center gap-2"><span className="h-2 w-2 rounded-sm bg-[#00864a]" />Cost (₦ thousands) · right axis</span>
+          </div>
         </CardHeader>
         <CardContent>
           <div className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
+            <ResponsiveContainer width="100%" height="100%" minWidth={0} initialDimension={{ width: 720, height: 256 }}>
               <BarChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="month" />
-                <YAxis yAxisId="left" />
-                <YAxis yAxisId="right" orientation="right" />
+                <CartesianGrid vertical={false} stroke="#e7e9ee" strokeDasharray="3 4" />
+                <XAxis dataKey="month" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: '#6b7280' }} />
+                <YAxis yAxisId="left" axisLine={false} tickLine={false} width={44} tick={{ fontSize: 11, fill: '#6b7280' }} />
+                <YAxis yAxisId="right" orientation="right" axisLine={false} tickLine={false} width={44} tick={{ fontSize: 11, fill: '#6b7280' }} />
                 <Tooltip />
-                <Bar yAxisId="left" dataKey="liters" fill="#3b82f6" name="Liters" radius={[4, 4, 0, 0]} />
-                <Bar yAxisId="right" dataKey="cost" fill="#10b981" name="Cost (₦k)" radius={[4, 4, 0, 0]} />
+                <Bar yAxisId="left" dataKey="liters" fill="#15247f" name="Liters" radius={[5, 5, 0, 0]} />
+                <Bar yAxisId="right" dataKey="cost" fill="#00864a" name="Cost (₦k)" radius={[5, 5, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -554,9 +548,24 @@ export default function Fuel() {
       </Card>
 
       {/* Fuel logs table */}
-      <Card>
-        <CardHeader>
+      <Card className="gap-0 overflow-hidden py-0">
+        <CardHeader className="border-b border-gray-100 py-5">
           <CardTitle className="text-lg">Fuel Purchase History</CardTitle>
+          <div className="mt-3 flex flex-col gap-3 sm:flex-row">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+              <Input aria-label="Search fuel records" className="pl-10" placeholder="Search plate or fuel station..." value={searchQuery} onChange={(event) => { setSearchQuery(event.target.value); setCurrentPage(1); }} />
+            </div>
+            <Select value={periodFilter} onValueChange={(value) => { setPeriodFilter(value as typeof periodFilter); setCurrentPage(1); }}>
+              <SelectTrigger className="w-full sm:w-40" aria-label="Filter fuel records by period"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All dates</SelectItem>
+                <SelectItem value="month">This month</SelectItem>
+                <SelectItem value="30d">Last 30 days</SelectItem>
+                <SelectItem value="90d">Last 90 days</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </CardHeader>
         <CardContent className="p-0">
           <Table>
@@ -571,14 +580,14 @@ export default function Fuel() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {fuelLogs.length === 0 ? (
+              {filteredFuelLogs.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={6} className="text-center py-8 text-gray-500">
-                    No fuel records
+                    {fuelLogs.length ? 'No fuel records match these filters' : 'No fuel records'}
                   </TableCell>
                 </TableRow>
               ) : (
-                fuelLogs.map((log) => {
+                paginatedFuelLogs.map((log) => {
                   const vehicle = vehicles.find((v) => v.id === log.vehicleId);
                   return (
                     <TableRow key={log.id}>
@@ -605,6 +614,7 @@ export default function Fuel() {
             </TableBody>
           </Table>
         </CardContent>
+        <RegisterPagination currentPage={visibleFuelPage} itemLabel="records" onPageChange={setCurrentPage} onPageSizeChange={(size) => { setPageSize(size); setCurrentPage(1); }} pageSize={pageSize} totalItems={filteredFuelLogs.length} />
       </Card>
     </div>
   );

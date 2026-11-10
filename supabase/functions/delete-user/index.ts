@@ -5,18 +5,6 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-access-token, x-client-info, apikey, content-type',
 };
 
-function decodeJwtPayload(token: string) {
-  const [, payload] = token.split('.');
-  if (!payload) {
-    throw new Error('Invalid access token');
-  }
-
-  const normalized = payload.replace(/-/g, '+').replace(/_/g, '/');
-  const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, '=');
-  const decoded = atob(padded);
-  return JSON.parse(decoded) as { sub?: string; subject?: string };
-}
-
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
@@ -44,15 +32,26 @@ Deno.serve(async (req) => {
 
     const adminClient = createClient(supabaseUrl, supabaseServiceRoleKey);
     const accessToken = authHeader.replace('Bearer ', '').trim();
-    const jwtPayload = decodeJwtPayload(accessToken);
-    const requestingUserId = jwtPayload.sub ?? jwtPayload.subject;
+    if (!accessToken) {
+      return new Response(JSON.stringify({ error: 'Missing access token' }), {
+        status: 401,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
 
-    if (!requestingUserId) {
+    const {
+      data: { user: requestingUser },
+      error: authError,
+    } = await adminClient.auth.getUser(accessToken);
+
+    if (authError || !requestingUser) {
       return new Response(JSON.stringify({ error: 'Unauthorized' }), {
         status: 401,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
+
+    const requestingUserId = requestingUser.id;
 
     const { data: requesterProfile, error: requesterProfileError } = await adminClient
       .from('profiles')

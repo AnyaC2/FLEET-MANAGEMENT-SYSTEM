@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useEffectEvent, useState } from 'react';
 import type { User } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -50,8 +50,10 @@ export default function UserManagement() {
     department: '',
   });
 
+  const loadInitialUsers = useEffectEvent(() => loadUsers());
+
   useEffect(() => {
-    void loadUsers();
+    void loadInitialUsers();
   }, []);
 
   const loadUsers = async () => {
@@ -231,10 +233,10 @@ export default function UserManagement() {
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-gray-900">User Management</h1>
-        <p className="text-gray-500">Assign roles to existing user accounts.</p>
+    <div className="space-y-5">
+      <div className="lfz-enter">
+        <h1 className="text-3xl font-semibold tracking-[-0.035em] text-gray-900 sm:text-[2.25rem]">User access</h1>
+        <p className="mt-1.5 text-sm text-gray-500">Create accounts and control access to fleet operations.</p>
       </div>
 
       <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
@@ -317,13 +319,6 @@ export default function UserManagement() {
           </form>
         </DialogContent>
       </Dialog>
-
-      <Card className="border-amber-200 bg-amber-50">
-        <CardContent className="p-4 text-sm text-amber-900">
-          Account creation uses a secure Supabase Edge Function. If the button fails, deploy the setup in
-          `/docs/user-management-setup.md`.
-        </CardContent>
-      </Card>
 
       <Card>
         <CardHeader>

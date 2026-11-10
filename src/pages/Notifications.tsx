@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useEffectEvent } from 'react';
 import type { Notification, Vehicle, Driver } from '@/types';
 import { Button } from '@/components/ui/button';
 import { useAuth } from '@/context/AuthContext';
@@ -28,11 +28,7 @@ export default function Notifications() {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [drivers, setDrivers] = useState<Driver[]>([]);
 
-  useEffect(() => {
-    void loadData();
-  }, []);
-
-  const loadData = async () => {
+  async function loadData() {
     const [notifData, related] = await Promise.all([
       listNotifications(),
       listVehiclesAndDrivers(),
@@ -43,7 +39,13 @@ export default function Notifications() {
     setNotifications(sortedNotifs);
     setVehicles(related.vehicles);
     setDrivers(related.drivers);
-  };
+  }
+
+  const loadInitialData = useEffectEvent(() => loadData());
+
+  useEffect(() => {
+    void loadInitialData();
+  }, []);
 
   const markAsRead = async (id: string) => {
     await updateNotification(id, { isRead: true });
@@ -75,9 +77,9 @@ export default function Notifications() {
 
   const getNotificationColor = (type: Notification['type']) => {
     const colors = {
-      maintenance: 'bg-blue-100 text-blue-600',
-      insurance: 'bg-green-100 text-green-600',
-      license: 'bg-purple-100 text-purple-600',
+      maintenance: 'bg-[#eef0f8] text-[#15247f]',
+      insurance: 'bg-[#eaf7f0] text-[#21895a]',
+      license: 'bg-[#eef0f8] text-[#15247f]',
       fuel: 'bg-amber-100 text-amber-600',
       incident: 'bg-red-100 text-red-600',
       general: 'bg-gray-100 text-gray-600',
@@ -88,12 +90,12 @@ export default function Notifications() {
   const unreadCount = notifications.filter((n) => !n.isRead).length;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {/* Page header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="lfz-enter flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Notifications</h1>
-          <p className="text-gray-500">
+          <h1 className="text-3xl font-semibold tracking-[-0.035em] text-gray-900 sm:text-[2.25rem]">Notifications</h1>
+          <p className="mt-1.5 text-sm text-gray-500">
             {unreadCount > 0 ? `${unreadCount} unread notifications` : 'All caught up!'}
           </p>
         </div>
@@ -116,7 +118,7 @@ export default function Notifications() {
         <Card>
           <CardContent className="p-4">
             <p className="text-sm text-gray-500">Unread</p>
-            <p className="text-2xl font-bold text-blue-600">{unreadCount}</p>
+            <p className="text-2xl font-bold text-[#15247f]">{unreadCount}</p>
           </CardContent>
         </Card>
         <Card>
@@ -174,11 +176,11 @@ export default function Notifications() {
                   return (
                     <TableRow
                       key={notification.id}
-                      className={notification.isRead ? '' : 'bg-blue-50/50'}
+                      className={notification.isRead ? '' : 'bg-[#f5f6fb]'}
                     >
                       <TableCell>
                         <div
-                          className={`w-10 h-10 rounded-lg flex items-center justify-center ${getNotificationColor(
+                          className={`flex h-10 w-10 items-center justify-center rounded-full ${getNotificationColor(
                             notification.type
                           )}`}
                         >

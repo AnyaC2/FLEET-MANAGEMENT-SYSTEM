@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useEffectEvent } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import type { Driver, Vehicle, Trip, Assignment, Incident } from '@/types';
 import { Button } from '@/components/ui/button';
@@ -34,13 +34,7 @@ export default function DriverDetail() {
   const [assignmentHistory, setAssignmentHistory] = useState<Assignment[]>([]);
   const [vehiclesMap, setVehiclesMap] = useState<Record<string, Vehicle>>({});
 
-  useEffect(() => {
-    if (id) {
-      void loadDriverData();
-    }
-  }, [id]);
-
-  const loadDriverData = async () => {
+  async function loadDriverData() {
     const driverData = await getDriverById(id!);
     if (!driverData) {
       navigate('/drivers');
@@ -88,7 +82,15 @@ export default function DriverDetail() {
         return acc;
       }, {})
     );
-  };
+  }
+
+  const loadInitialDriverData = useEffectEvent(() => loadDriverData());
+
+  useEffect(() => {
+    if (id) {
+      void loadInitialDriverData();
+    }
+  }, [id]);
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat('en-NG', {
@@ -116,7 +118,7 @@ export default function DriverDetail() {
     new Date(driver.licenseExpiry).getTime() - new Date().getTime() < 90 * 24 * 60 * 60 * 1000;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {/* Back button */}
       <Link to="/drivers">
         <Button variant="ghost" className="pl-0">
@@ -126,14 +128,14 @@ export default function DriverDetail() {
       </Link>
 
       {/* Driver header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="lfz-enter flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div className="flex items-center gap-4">
-          <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center">
-            <User className="w-8 h-8 text-primary" />
+          <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-[#15247f] text-white shadow-[0_10px_24px_rgba(21,36,127,0.18)]">
+            <User className="h-6 w-6" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-gray-900">{driver.fullName}</h1>
-            <p className="text-gray-500">{driver.licenseNumber}</p>
+            <h1 className="text-3xl font-semibold tracking-[-0.035em] text-gray-900 sm:text-[2.25rem]">{driver.fullName}</h1>
+            <p className="mt-1 text-sm text-gray-500">Licence {driver.licenseNumber}</p>
           </div>
         </div>
         <Badge variant={driver.status === 'Active' ? 'default' : 'secondary'} 
@@ -152,8 +154,8 @@ export default function DriverDetail() {
                 <p className="text-sm text-gray-500">Total Trips</p>
                 <p className="text-xl font-bold">{totalTrips}</p>
               </div>
-              <div className="w-10 h-10 rounded-lg bg-blue-100 flex items-center justify-center">
-                <Route className="w-5 h-5 text-blue-500" />
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#eef0f8]">
+                <Route className="h-5 w-5 text-[#15247f]" />
               </div>
             </div>
           </CardContent>
@@ -165,8 +167,8 @@ export default function DriverDetail() {
                 <p className="text-sm text-gray-500">Total Distance</p>
                 <p className="text-xl font-bold">{totalDistance.toLocaleString()} km</p>
               </div>
-              <div className="w-10 h-10 rounded-lg bg-sky-100 flex items-center justify-center">
-                <Car className="w-5 h-5 text-sky-600" />
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#eef0f8]">
+                <Car className="h-5 w-5 text-[#15247f]" />
               </div>
             </div>
           </CardContent>
@@ -178,7 +180,7 @@ export default function DriverDetail() {
                 <p className="text-sm text-gray-500">Incidents</p>
                 <p className="text-xl font-bold">{totalIncidents}</p>
               </div>
-              <div className="w-10 h-10 rounded-lg bg-red-100 flex items-center justify-center">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-100">
                 <AlertTriangle className="w-5 h-5 text-red-500" />
               </div>
             </div>
@@ -191,8 +193,8 @@ export default function DriverDetail() {
                 <p className="text-sm text-gray-500">Incident Cost</p>
                 <p className="text-xl font-bold">{formatCurrency(totalIncidentCost)}</p>
               </div>
-              <div className="w-10 h-10 rounded-lg bg-emerald-100 flex items-center justify-center">
-                <CircleDollarSign className="w-5 h-5 text-emerald-600" />
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#eaf7f0]">
+                <CircleDollarSign className="h-5 w-5 text-[#21895a]" />
               </div>
             </div>
           </CardContent>

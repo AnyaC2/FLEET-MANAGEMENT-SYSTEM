@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import type { Document, DocumentAudience, DocumentTypeOption, Driver, Vehicle } from '@/types';
 import { Button } from '@/components/ui/button';
@@ -75,11 +75,7 @@ export default function Documents() {
     appliesTo: 'vehicle' as DocumentAudience | 'both',
   });
 
-  useEffect(() => {
-    void loadData();
-  }, []);
-
-  const loadData = async () => {
+  async function loadData() {
     const [docData, fleetData, typeData] = await Promise.all([
       listDocuments(),
       listOperationalVehiclesAndActiveDrivers(),
@@ -90,7 +86,13 @@ export default function Documents() {
     setVehicles(fleetData.vehicles);
     setDrivers(fleetData.drivers);
     setDocumentTypes(typeData);
-  };
+  }
+
+  const loadInitialData = useEffectEvent(() => loadData());
+
+  useEffect(() => {
+    void loadInitialData();
+  }, []);
 
   const visibleDocumentTypes = useMemo(
     () =>
@@ -346,13 +348,13 @@ export default function Documents() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+    <div className="space-y-5">
+      <div className="lfz-enter flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Documents</h1>
-          <p className="text-gray-500">Organize vehicle and driver documents with expiry tracking and shared document types.</p>
+          <h1 className="text-3xl font-semibold tracking-[-0.035em] text-gray-900 sm:text-[2.25rem]">Documents</h1>
+          <p className="mt-1.5 text-sm text-gray-500">Organize vehicle and driver documents with expiry tracking and shared document types.</p>
         </div>
-        <div className="flex flex-wrap gap-3">
+        <div className="flex flex-wrap gap-2.5">
           {canManageRecords && (
             <Button onClick={() => {
               setFormData({

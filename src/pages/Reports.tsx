@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 import { format } from 'date-fns';
 import type { FuelLog, Incident, Maintenance, Trip, Vehicle } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -33,7 +33,7 @@ import {
   listOperationalVehicles,
 } from '@/lib/fleet-data';
 
-const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6'];
+const COLORS = ['#15247f', '#00864a', '#d99a12', '#ed1c24', '#6570b4'];
 type PeriodPreset = '7d' | '30d' | '90d' | '365d' | 'all' | 'custom';
 
 function formatBucketLabel(date: Date, granularity: 'day' | 'week' | 'month') {
@@ -60,11 +60,7 @@ export default function Reports() {
   const [customStartDate, setCustomStartDate] = useState('');
   const [customEndDate, setCustomEndDate] = useState('');
 
-  useEffect(() => {
-    void loadReportData();
-  }, []);
-
-  const loadReportData = async () => {
+  async function loadReportData() {
     const [allVehicles, fuel, maintenanceRecords, incidentRecords, tripRecords] = await Promise.all([
       listOperationalVehicles(),
       listFuelLogs(),
@@ -78,7 +74,13 @@ export default function Reports() {
     setMaintenance(maintenanceRecords);
     setIncidents(incidentRecords);
     setTrips(tripRecords);
-  };
+  }
+
+  const loadInitialReportData = useEffectEvent(() => loadReportData());
+
+  useEffect(() => {
+    void loadInitialReportData();
+  }, []);
 
   const activeRange = useMemo(() => {
     if (periodPreset === 'all') {
@@ -269,7 +271,7 @@ export default function Reports() {
       trendData,
       vehiclePerformance,
     };
-  }, [activeRange, fuelLogs, incidents, maintenance, periodPreset, selectedVehicle, trips, vehicles]);
+  }, [activeRange, fuelLogs, incidents, maintenance, selectedVehicle, trips, vehicles]);
 
   const handleExportPdf = () => {
     if (!reportRef.current) {
@@ -351,13 +353,13 @@ export default function Reports() {
       : 'N/A';
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
+    <div className="space-y-5">
+      <div className="lfz-enter flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Reports & Analytics</h1>
-          <p className="text-gray-500">Build filtered fleet reports and export the current report view as PDF.</p>
+          <h1 className="text-3xl font-semibold tracking-[-0.035em] text-gray-900 sm:text-[2.25rem]">Reports & analytics</h1>
+          <p className="mt-1.5 text-sm text-gray-500">Build filtered fleet reports and export the current report view as PDF.</p>
         </div>
-        <div className="flex flex-wrap gap-3">
+        <div className="flex flex-wrap gap-2.5">
           <Button variant="outline" onClick={handleExportPdf}>
             <Download className="mr-2 h-4 w-4" />
             Export PDF
@@ -454,8 +456,8 @@ export default function Reports() {
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-green-500/10">
-                  <FileText className="h-5 w-5 text-green-500" />
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#eaf7f0]">
+                  <FileText className="h-5 w-5 text-[#21895a]" />
                 </div>
                 <div>
                   <p className="text-sm text-gray-500">Fuel Cost</p>
@@ -467,8 +469,8 @@ export default function Reports() {
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-500/10">
-                  <FileText className="h-5 w-5 text-blue-500" />
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#eef0f8]">
+                  <FileText className="h-5 w-5 text-[#15247f]" />
                 </div>
                 <div>
                   <p className="text-sm text-gray-500">Maintenance</p>
@@ -480,7 +482,7 @@ export default function Reports() {
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-red-500/10">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-500/10">
                   <FileText className="h-5 w-5 text-red-500" />
                 </div>
                 <div>
@@ -493,7 +495,7 @@ export default function Reports() {
           <Card>
             <CardContent className="p-4">
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-amber-500/10">
+                <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-500/10">
                   <FileText className="h-5 w-5 text-amber-500" />
                 </div>
                 <div>
@@ -512,7 +514,7 @@ export default function Reports() {
             </CardHeader>
             <CardContent>
               <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} initialDimension={{ width: 520, height: 256 }}>
                   <PieChart>
                     <Pie
                       data={reportData.costBreakdown}
@@ -553,14 +555,14 @@ export default function Reports() {
             </CardHeader>
             <CardContent>
               <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} initialDimension={{ width: 520, height: 256 }}>
                   <BarChart data={reportData.trendData}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="period" />
                     <YAxis />
                     <Tooltip formatter={(value) => `₦${Number(value ?? 0)}k`} />
-                    <Bar dataKey="fuel" fill="#10b981" name="Fuel (₦k)" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="maintenance" fill="#3b82f6" name="Maintenance (₦k)" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="fuel" fill="#15247f" name="Fuel (₦k)" radius={[5, 5, 0, 0]} />
+                    <Bar dataKey="maintenance" fill="#00864a" name="Maintenance (₦k)" radius={[5, 5, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -575,14 +577,14 @@ export default function Reports() {
             </CardHeader>
             <CardContent>
               <div className="h-64">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} initialDimension={{ width: 720, height: 288 }}>
                   <BarChart data={reportData.vehiclePerformance}>
                     <CartesianGrid strokeDasharray="3 3" />
                     <XAxis dataKey="name" />
                     <YAxis />
                     <Tooltip />
-                    <Bar dataKey="fuel" fill="#10b981" name="Fuel Cost (₦k)" radius={[4, 4, 0, 0]} />
-                    <Bar dataKey="maintenance" fill="#3b82f6" name="Maintenance (₦k)" radius={[4, 4, 0, 0]} />
+                    <Bar dataKey="fuel" fill="#15247f" name="Fuel Cost (₦k)" radius={[5, 5, 0, 0]} />
+                    <Bar dataKey="maintenance" fill="#00864a" name="Maintenance (₦k)" radius={[5, 5, 0, 0]} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>

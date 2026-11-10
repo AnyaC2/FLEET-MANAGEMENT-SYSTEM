@@ -204,6 +204,47 @@ export interface AppSettings {
   fuelEfficiencyUnit: string;
 }
 
+export type ImportBatchSheetKey =
+  | 'vehicles'
+  | 'drivers'
+  | 'assignments'
+  | 'fuelLogs'
+  | 'maintenance'
+  | 'incidents'
+  | 'trips';
+
+export type ImportBatchIssueSeverity = 'error' | 'warning';
+
+export interface ImportBatchIssue {
+  sheet: string;
+  row: number;
+  severity: ImportBatchIssueSeverity;
+  message: string;
+}
+
+export interface ImportBatchSheetSummary {
+  key: ImportBatchSheetKey;
+  label: string;
+  detectedSheetName: string;
+  sourceRows: number;
+  validRows: number;
+}
+
+export interface ImportBatch {
+  id: string;
+  fileName: string;
+  importedAt: string;
+  importedByUserId?: string;
+  importedByName?: string;
+  totalRows: number;
+  validRows: number;
+  created: Record<ImportBatchSheetKey, number>;
+  skipped: Record<ImportBatchSheetKey, number>;
+  issueCount: number;
+  issues: ImportBatchIssue[];
+  sheets: ImportBatchSheetSummary[];
+}
+
 // Dashboard Stats
 export interface DashboardStats {
   totalVehicles: number;

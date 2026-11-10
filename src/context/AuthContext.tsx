@@ -73,6 +73,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const supabaseClient = supabase;
     let isMounted = true;
+    let currentUserId: string | null = null;
+    let hydratingUserId: string | null = null;
 
     const loadProfile = async (userId: string): Promise<User | null> => {
       const { data: profile, error } = await withTimeout(
@@ -103,81 +105,82 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return data.nextLevel === 'aal2' && data.currentLevel !== 'aal2';
     };
 
-    const loadSession = async () => {
-      try {
-        const {
-          data: { session },
-        } = await withTimeout(
-          supabaseClient.auth.getSession(),
-          8000,
-          'Timed out while restoring session'
-        );
-
-        if (!session?.user) {
-          if (isMounted) {
-            setUser(null);
-          }
-          return;
+    const hydrateSession = async (
+      session: Awaited<ReturnType<typeof supabaseClient.auth.getSession>>['data']['session'],
+      force = false
+    ) => {
+      if (!session?.user) {
+        currentUserId = null;
+        hydratingUserId = null;
+        if (isMounted) {
+          setUser(null);
+          setNeedsMfaVerification(false);
+          setIsLoading(false);
         }
+        return;
+      }
 
-        const mappedUser = await loadProfile(session.user.id);
-        const mfaRequired = await loadMfaRequirement();
+      if (!force && (currentUserId === session.user.id || hydratingUserId === session.user.id)) {
+        if (isMounted && currentUserId === session.user.id) {
+          setIsLoading(false);
+        }
+        return;
+      }
+
+      hydratingUserId = session.user.id;
+      try {
+        const [mappedUser, mfaRequired] = await Promise.all([
+          loadProfile(session.user.id),
+          loadMfaRequirement(),
+        ]);
 
         if (isMounted) {
+          currentUserId = session.user.id;
           setUser(mappedUser);
           setNeedsMfaVerification(mfaRequired);
         }
       } catch (error) {
-        console.error('Failed to restore Supabase session.', error);
+        console.error('Failed to load Supabase profile after auth change.', error);
         if (isMounted) {
           setUser(null);
           setNeedsMfaVerification(false);
         }
       } finally {
+        if (hydratingUserId === session.user.id) {
+          hydratingUserId = null;
+        }
         if (isMounted) {
           setIsLoading(false);
         }
       }
     };
 
-    void loadSession();
-
     const {
       data: { subscription },
-    } = supabaseClient.auth.onAuthStateChange((_event, session) => {
+    } = supabaseClient.auth.onAuthStateChange((event, session) => {
       setIsLoading(true);
 
-      if (!session?.user) {
-        setUser(null);
-        setNeedsMfaVerification(false);
+      if (event === 'TOKEN_REFRESHED' && session?.user.id === currentUserId) {
         setIsLoading(false);
         return;
       }
 
-      void (async () => {
-        try {
-          const mappedUser = await loadProfile(session.user.id);
-          const mfaRequired = await loadMfaRequirement();
-          if (isMounted) {
-            setUser(mappedUser);
-            setNeedsMfaVerification(mfaRequired);
-          }
-        } catch (error) {
-          console.error('Failed to load Supabase profile after auth change.', error);
-          if (isMounted) {
-            setUser(null);
-            setNeedsMfaVerification(false);
-          }
-        } finally {
-          if (isMounted) {
-            setIsLoading(false);
-          }
-        }
-      })();
+      window.setTimeout(() => {
+        // Sign-in and MFA verification can issue a new session for the same user.
+        // Refresh the assurance level instead of treating that session as a duplicate.
+        void hydrateSession(session, event !== 'INITIAL_SESSION');
+      }, 0);
     });
+
+    const initializationTimeout = window.setTimeout(() => {
+      if (isMounted) {
+        setIsLoading(false);
+      }
+    }, 10_000);
 
     return () => {
       isMounted = false;
+      window.clearTimeout(initializationTimeout);
       subscription.unsubscribe();
     };
   }, []);
@@ -237,16 +240,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       return false;
     }
 
-    const { error } = await withTimeout(
-      supabase.auth.signInWithPassword({
-        email,
-        password,
-      }),
-      8000,
-      'Timed out while signing in'
-    );
+    setIsLoading(true);
 
-    return !error;
+    try {
+      const { error } = await withTimeout(
+        supabase.auth.signInWithPassword({
+          email,
+          password,
+        }),
+        8000,
+        'Timed out while signing in'
+      );
+
+      if (error) {
+        setIsLoading(false);
+      }
+
+      return !error;
+    } catch (error) {
+      setIsLoading(false);
+      throw error;
+    }
   };
 
   const logout = () => {
@@ -284,6 +298,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
+// The provider and its hook intentionally share this module so they use the same context instance.
+// eslint-disable-next-line react-refresh/only-export-components
 export function useAuth() {
   const context = useContext(AuthContext);
   if (context === undefined) {

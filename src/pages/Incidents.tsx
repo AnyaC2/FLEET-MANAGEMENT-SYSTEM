@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { RegisterPagination } from '@/components/RegisterPagination';
 import {
   Dialog,
   DialogContent,
@@ -30,7 +31,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Plus, Eye, CheckCircle2, Clock, Wrench, AlertTriangle, CircleDollarSign, Download } from 'lucide-react';
+import { Plus, Eye, CheckCircle2, Clock, Wrench, AlertTriangle, CircleDollarSign, Download, Search } from 'lucide-react';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import {
@@ -51,6 +52,11 @@ export default function Incidents() {
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [drivers, setDrivers] = useState<Driver[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [statusFilter, setStatusFilter] = useState<Incident['status'] | 'all'>('all');
+  const [periodFilter, setPeriodFilter] = useState<'all' | '30d' | '90d' | '365d'>('all');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
@@ -129,7 +135,7 @@ export default function Incidents() {
       setIsAddModalOpen(false);
       resetForm();
       await loadData();
-    } catch (error) {
+    } catch {
       toast.error('Failed to report incident');
     } finally {
       setIsSubmitting(false);
@@ -158,7 +164,7 @@ export default function Incidents() {
       if (updatedIncident) {
         setSelectedIncident(updatedIncident);
       }
-    } catch (error) {
+    } catch {
       toast.error('Failed to update incident status');
     }
   };
@@ -175,7 +181,7 @@ export default function Incidents() {
       if (updatedIncident) {
         setSelectedIncident(updatedIncident);
       }
-    } catch (error) {
+    } catch {
       toast.error('Failed to update final repair cost');
     }
   };
@@ -231,6 +237,19 @@ export default function Incidents() {
   const resolvedCount = incidents.filter((i) => i.status === 'Resolved').length;
   const pendingCount = incidents.filter((i) => i.status !== 'Resolved').length;
   const totalCost = incidents.reduce((sum, i) => sum + (i.finalRepairCost || i.repairCost), 0);
+  const filteredIncidents = incidents.filter((incident) => {
+    const vehicle = vehicles.find((item) => item.id === incident.vehicleId);
+    const query = searchQuery.trim().toLowerCase();
+    const matchesSearch = !query || [incident.title, incident.location, vehicle?.plateNumber]
+      .some((value) => value?.toLowerCase().includes(query));
+    const matchesStatus = statusFilter === 'all' || incident.status === statusFilter;
+    const daysAgo = (Date.now() - new Date(incident.date).getTime()) / 86_400_000;
+    const matchesPeriod = periodFilter === 'all' || (daysAgo >= 0 && daysAgo <= Number(periodFilter.replace('d', '')));
+    return matchesSearch && matchesStatus && matchesPeriod;
+  });
+  const incidentPageCount = Math.max(1, Math.ceil(filteredIncidents.length / pageSize));
+  const visibleIncidentPage = Math.min(currentPage, incidentPageCount);
+  const paginatedIncidents = filteredIncidents.slice((visibleIncidentPage - 1) * pageSize, visibleIncidentPage * pageSize);
 
   const handleExportIncidentsReport = () => {
     const range = resolveDateRange({
@@ -270,14 +289,14 @@ export default function Incidents() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {/* Page header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <div className="lfz-enter flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Incidents</h1>
-          <p className="text-gray-500">Track and manage vehicle incidents</p>
+          <h1 className="text-3xl font-semibold tracking-[-0.035em] text-gray-900 sm:text-[2.25rem]">Incidents</h1>
+          <p className="mt-1.5 text-sm text-gray-500">Record, assess, and follow vehicle incidents through resolution.</p>
         </div>
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-2.5">
           <Dialog open={isReportModalOpen} onOpenChange={setIsReportModalOpen}>
             <Button variant="outline" onClick={() => setIsReportModalOpen(true)}>
               <Download className="w-4 h-4 mr-2" />
@@ -531,7 +550,7 @@ export default function Incidents() {
                 <p className="text-sm text-gray-500">Total Incidents</p>
                 <p className="text-2xl font-bold">{totalIncidents}</p>
               </div>
-              <div className="w-10 h-10 rounded-lg bg-red-100 flex items-center justify-center">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-red-100">
                 <AlertTriangle className="w-5 h-5 text-red-500" />
               </div>
             </div>
@@ -544,8 +563,8 @@ export default function Incidents() {
                 <p className="text-sm text-gray-500">Resolved</p>
                 <p className="text-2xl font-bold text-green-600">{resolvedCount}</p>
               </div>
-              <div className="w-10 h-10 rounded-lg bg-green-100 flex items-center justify-center">
-                <CheckCircle2 className="w-5 h-5 text-green-500" />
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#eaf7f0]">
+                <CheckCircle2 className="h-5 w-5 text-[#21895a]" />
               </div>
             </div>
           </CardContent>
@@ -557,7 +576,7 @@ export default function Incidents() {
                 <p className="text-sm text-gray-500">Pending</p>
                 <p className="text-2xl font-bold text-amber-600">{pendingCount}</p>
               </div>
-              <div className="w-10 h-10 rounded-lg bg-amber-100 flex items-center justify-center">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-amber-100">
                 <Clock className="w-5 h-5 text-amber-500" />
               </div>
             </div>
@@ -570,8 +589,8 @@ export default function Incidents() {
                 <p className="text-sm text-gray-500">Total Cost</p>
                 <p className="text-2xl font-bold">{formatCurrency(totalCost)}</p>
               </div>
-              <div className="w-10 h-10 rounded-lg bg-emerald-100 flex items-center justify-center">
-                <CircleDollarSign className="w-5 h-5 text-emerald-600" />
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-[#eaf7f0]">
+                <CircleDollarSign className="h-5 w-5 text-[#21895a]" />
               </div>
             </div>
           </CardContent>
@@ -579,9 +598,33 @@ export default function Incidents() {
       </div>
 
       {/* Incidents table */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-lg">All Incidents</CardTitle>
+      <Card className="gap-0 overflow-hidden py-0">
+        <CardHeader className="border-b border-gray-100 py-5">
+          <CardTitle className="text-lg">Incident register</CardTitle>
+          <div className="mt-3 flex flex-col gap-3 lg:flex-row">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+              <Input aria-label="Search incidents" className="pl-10" placeholder="Search title, plate, or location..." value={searchQuery} onChange={(event) => { setSearchQuery(event.target.value); setCurrentPage(1); }} />
+            </div>
+            <Select value={statusFilter} onValueChange={(value) => { setStatusFilter(value as typeof statusFilter); setCurrentPage(1); }}>
+              <SelectTrigger className="w-full lg:w-40" aria-label="Filter incidents by status"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All statuses</SelectItem>
+                <SelectItem value="Under Review">Under review</SelectItem>
+                <SelectItem value="In Repair">In repair</SelectItem>
+                <SelectItem value="Resolved">Resolved</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={periodFilter} onValueChange={(value) => { setPeriodFilter(value as typeof periodFilter); setCurrentPage(1); }}>
+              <SelectTrigger className="w-full lg:w-40" aria-label="Filter incidents by period"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All dates</SelectItem>
+                <SelectItem value="30d">Last 30 days</SelectItem>
+                <SelectItem value="90d">Last 90 days</SelectItem>
+                <SelectItem value="365d">Last 12 months</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </CardHeader>
         <CardContent className="p-0">
           <Table>
@@ -597,14 +640,14 @@ export default function Incidents() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {incidents.length === 0 ? (
+              {filteredIncidents.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={7} className="text-center py-8 text-gray-500">
-                    No incidents reported
+                    {incidents.length ? 'No incidents match these filters' : 'No incidents reported'}
                   </TableCell>
                 </TableRow>
               ) : (
-                incidents.map((incident) => {
+                paginatedIncidents.map((incident) => {
                   const vehicle = vehicles.find((v) => v.id === incident.vehicleId);
                   return (
                     <TableRow key={incident.id}>
@@ -639,6 +682,7 @@ export default function Incidents() {
             </TableBody>
           </Table>
         </CardContent>
+        <RegisterPagination currentPage={visibleIncidentPage} itemLabel="incidents" onPageChange={setCurrentPage} onPageSizeChange={(size) => { setPageSize(size); setCurrentPage(1); }} pageSize={pageSize} totalItems={filteredIncidents.length} />
       </Card>
 
       {/* Detail Modal */}

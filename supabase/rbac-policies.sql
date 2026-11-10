@@ -55,6 +55,32 @@ $$;
 revoke all on function public.can_manage_records() from public;
 grant execute on function public.can_manage_records() to authenticated;
 
+create or replace function public.protect_profile_authorization_fields()
+returns trigger
+language plpgsql
+security definer
+set search_path = public
+as $$
+begin
+  if auth.uid() is not null
+     and not public.is_system_admin()
+     and (
+       new.role is distinct from old.role
+       or new.status is distinct from old.status
+     ) then
+    raise exception 'Only system administrators can change profile roles or account status';
+  end if;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists profiles_protect_authorization_fields on public.profiles;
+create trigger profiles_protect_authorization_fields
+before update on public.profiles
+for each row
+execute function public.protect_profile_authorization_fields();
+
 drop policy if exists "System admins can view all profiles" on public.profiles;
 create policy "System admins can view all profiles"
 on public.profiles
@@ -239,28 +265,17 @@ to authenticated
 using (public.can_manage_records())
 with check (public.can_manage_records());
 
-drop policy if exists "Authenticated users can upload document files" on storage.objects;
-create policy "Editors and system admins can upload document files"
-on storage.objects
+drop policy if exists "Editors and system admins can insert document types" on public.document_types;
+create policy "Editors and system admins can insert document types"
+on public.document_types
 for insert
 to authenticated
-with check (
-  bucket_id = 'documents'
-  and public.can_manage_records()
-);
+with check (public.can_manage_records());
 
-drop policy if exists "Authenticated users can update document files" on storage.objects;
-create policy "Editors and system admins can update document files"
-on storage.objects
-for update
+drop policy if exists "Authenticated users can insert import batches" on public.import_batches;
+drop policy if exists "Editors and system admins can insert import batches" on public.import_batches;
+create policy "Editors and system admins can insert import batches"
+on public.import_batches
+for insert
 to authenticated
-using (
-  bucket_id = 'documents'
-  and public.can_manage_records()
-)
-with check (
-  bucket_id = 'documents'
-  and public.can_manage_records()
-);
-
-drop policy if exists "Authenticated users can delete document files" on storage.objects;
+with check (public.can_manage_records());
